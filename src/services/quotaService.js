@@ -3,7 +3,10 @@ const path = require('path');
 const Database = require('better-sqlite3');
 
 const DAILY_LIMIT = 3;
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const IS_RENDER = Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL);
+const DATA_DIR = IS_RENDER
+  ? path.join('/tmp', 'mingme-ai-server-data')
+  : path.join(__dirname, '..', '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'mingme-ai.sqlite');
 const migrationMessages = [];
 

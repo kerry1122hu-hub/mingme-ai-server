@@ -7,6 +7,14 @@ const { DB_FILE, getMigrationMessages } = require('./src/services/quotaService')
 
 const app = express();
 
+process.on('uncaughtException', (error) => {
+  console.error('[startup] Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[startup] Unhandled Rejection:', reason);
+});
+
 function formatApiLabel(url = '') {
   if (url.includes('/health')) return '健康检查';
   if (url.includes('/api/ai/quota-status')) return 'AI 额度查询';
@@ -18,6 +26,7 @@ function formatApiLabel(url = '') {
   if (url.includes('/admin/api/memberships')) return '后台会员列表';
   if (url.includes('/admin/api/set-membership')) return '后台会员设置';
   if (url.includes('/admin/api/set-extra-quota')) return '后台额外额度设置';
+  if (url.includes('/admin/ai-usage')) return '后台页面';
   return '未知接口';
 }
 
