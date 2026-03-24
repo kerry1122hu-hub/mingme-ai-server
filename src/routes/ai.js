@@ -35,6 +35,7 @@ router.post('/chat', async (req, res) => {
     const text = await runChat({
       userProfile: `${userProfile || ''}`.trim(),
       message: `${message}`.trim(),
+      chart,
     });
 
     res.locals.outputLength = `${text || ''}`.length;
