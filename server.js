@@ -48,6 +48,14 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '2mb' }));
 
+app.get('/', (req, res) => {
+  res.json({ ok: true, message: 'MingMe AI server root is healthy' });
+});
+
+app.head('/', (req, res) => {
+  res.status(200).end();
+});
+
 app.get('/health', (req, res) => {
   res.json({ ok: true, message: 'MingMe AI server is running' });
 });
