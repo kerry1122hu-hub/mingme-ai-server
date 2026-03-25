@@ -256,56 +256,73 @@ function detectTopicType(userInput = '') {
 }
 
 function detectTopicFocus(userInput = '', topicType = 'career') {
-  const text = textOf(userInput);
+  const text = textOf(userInput).replace(/\s+/g, ' ').trim();
+  if (!text) return '当前问题焦点未明确';
+
   const focusMap = {
     career: [
-      ['方向', '方向判断'],
-      ['扩张', '扩张判断'],
-      ['工作', '工作推进'],
-      ['创业', '创业推进'],
-      ['选择', '选择压力'],
-      ['跳槽', '去留判断'],
-      ['项目', '项目取舍'],
-      ['重点', '重点分散'],
+      ['方向', '方向还没真正收拢下来'],
+      ['扩张', '正在犹豫要不要继续扩张'],
+      ['工作', '工作推进与投入回报不成正比'],
+      ['创业', '想推进但节奏和资源还没完全稳住'],
+      ['选择', '卡在去留取舍和判断压力上'],
+      ['跳槽', '对去留方向拿不定主意'],
+      ['项目', '项目过多，主线不够清楚'],
+      ['重点', '事情很多，但重点没有收拢'],
     ],
     relationship: [
-      ['边界', '边界问题'],
-      ['沟通', '沟通失衡'],
-      ['冷战', '情绪拉扯'],
-      ['分手', '关系取舍'],
-      ['喜欢', '投入方式'],
-      ['对象', '关系判断'],
-      ['伴侣', '相处失衡'],
+      ['边界', '关系里的边界已经开始模糊'],
+      ['沟通', '真正卡住的是沟通没有说到点上'],
+      ['冷战', '关系已经进入拉扯和回避的状态'],
+      ['分手', '在要不要继续这段关系上摇摆'],
+      ['喜欢', '投入很多，但回应并不稳定'],
+      ['对象', '对这段关系的判断越来越不确定'],
+      ['伴侣', '相处模式正在持续消耗你'],
     ],
     emotion: [
-      ['焦虑', '焦虑内耗'],
-      ['压力', '压力承载'],
-      ['失眠', '节奏失衡'],
-      ['累', '长期消耗'],
-      ['崩溃', '情绪过载'],
-      ['烦', '情绪堆积'],
-      ['内耗', '自我消耗'],
+      ['焦虑', '焦虑背后是长期没有真正放松下来'],
+      ['压力', '压力已经超过了当前能承受的节奏'],
+      ['失眠', '状态和节奏都开始失衡'],
+      ['累', '长期消耗感已经明显压过恢复能力'],
+      ['崩溃', '情绪已经接近过载边缘'],
+      ['烦', '很多情绪没有被真正整理掉'],
+      ['内耗', '你正在被反复自我消耗拖住'],
     ],
     money: [
-      ['投资', '投资判断'],
-      ['收入', '收入焦虑'],
-      ['破财', '风险承受'],
-      ['赚钱', '收益节奏'],
-      ['现金流', '资金安排'],
-      ['回报', '预期管理'],
-      ['花钱', '支出控制'],
+      ['投资', '投资判断里掺杂了犹豫和不安'],
+      ['收入', '收入问题已经牵动整体安全感'],
+      ['破财', '你最担心的是判断失误带来的损失'],
+      ['赚钱', '你在收益节奏上有明显焦虑'],
+      ['现金流', '资金安排和安全边界需要重新梳理'],
+      ['回报', '你很在意投入和回报是否匹配'],
+      ['花钱', '支出控制已经影响到安全感'],
     ],
   };
 
   const matched = (focusMap[topicType] || [])
     .filter(([keyword]) => text.includes(keyword))
-    .map(([, label]) => label);
+    .map(([, summary]) => summary);
 
-  if (matched.length) {
-    return Array.from(new Set(matched)).join('、');
+  if (matched.length === 1) {
+    return matched[0];
   }
 
-  return text.replace(/\s+/g, ' ').slice(0, 28) || '当前问题焦点未明确';
+  if (matched.length > 1) {
+    const tail = matched[1].replace(/^正在|^真正卡住的是|^你正在被|^你最担心的是/, '');
+    return matched[0] + '，同时也夹杂着' + tail;
+  }
+
+  const shortText = text.replace(/[。！？!?,，；;：:]+/g, '，').slice(0, 34);
+  if (topicType === 'relationship') {
+    return '这次你最在意的，是关系里的相处和回应是否还值得继续。' + (shortText ? '问题核心接近：' + shortText : '');
+  }
+  if (topicType === 'emotion') {
+    return '这次你真正想理清的，是自己为什么会越来越累、越来越耗。' + (shortText ? '问题核心接近：' + shortText : '');
+  }
+  if (topicType === 'money') {
+    return '这次你最担心的，是金钱判断和风险节奏有没有失衡。' + (shortText ? '问题核心接近：' + shortText : '');
+  }
+  return '这次你真正卡住的，是方向、节奏和取舍还没有完全想清楚。' + (shortText ? '问题核心接近：' + shortText : '');
 }
 
 function buildLLMUserPrompt(input) {
@@ -391,8 +408,8 @@ async function runChat({ userProfile, message, chart }) {
 
   const response = await client.chat.completions.create({
     model: DEFAULT_MODEL,
-    temperature: 0.78,
-    max_completion_tokens: 520,
+    temperature: 0.88,
+    max_completion_tokens: 680,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: promptPayload.prompt },
@@ -458,3 +475,6 @@ module.exports = {
   runReading,
   runTranscription,
 };
+
+
+
