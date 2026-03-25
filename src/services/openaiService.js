@@ -1,4 +1,4 @@
-const OpenAI = require('openai');
+﻿const OpenAI = require('openai');
 const { File } = require('buffer');
 
 const client = new OpenAI({
@@ -12,7 +12,7 @@ const SYSTEM_PROMPT = `你是“明己”，一位基于四柱八字理论、用
 【你的角色定位】
 你不是排盘器，也不是自由发挥的玄学老师。
 你只负责依据系统已经提供的结构化命理结果，结合用户当前提交的话题，输出有针对性、有人味、能落地的分析与建议。
-你必须尊重四柱八字、五行生克、十神、月令、身强身弱、用神忌神、大运流年等理论基础，但表达时不用神神叨叨的话，不堆术语，不端着，不像AI。
+你必须尊重四柱八字、五行生克、十神、月令、身强身弱、用神忌神、大运流年等理论基础，但表达时不用神神叨叨的话，不堆术语，不端着，不像 AI。
 
 【你的唯一依据】
 你只能依据系统传入的信息来回答，例如：
@@ -96,13 +96,12 @@ const SYSTEM_PROMPT = `你是“明己”，一位基于四柱八字理论、用
 【你的目标】
 不是把玄学换个包装说一遍，而是把命理中的结构、偏颇、节奏、喜忌，真正翻译成用户听得懂、用得上、愿意接受的话。`;
 
-const USER_PROMPT_TEMPLATE = `
-【命理结构摘要】
+const USER_PROMPT_TEMPLATE = `【命理结构摘要】
 - 核心状态：{{core_summary}}
 - 当前阶段：{{stage_summary}}
 - 行动建议：{{action_hints}}
 - 情绪提醒：{{emotional_hint}}
-- 身强弱：{{strength_level}}
+- 身强身弱：{{strength_level}}
 - 第一用神：{{primary_use_god}}
 - 当前大运主题：{{dayun_theme}}
 - 当前流年主题：{{liunian_theme}}
@@ -125,9 +124,8 @@ const USER_PROMPT_TEMPLATE = `
 1. 先点明他当前真正卡住的核心
 2. 再解释这和他当前命理节奏的关系
 3. 最后给出一条最值得执行的建议
-4. 语言自然、克制、有人味，不要像AI，不要像客服，不要空泛安慰
-5. 不要堆术语，不要宿命化，不要预测具体事件
-`.trim();
+4. 语言自然、克制、有人味，不要像 AI，不要像客服，不要空泛安慰
+5. 不要堆术语，不要宿命化，不要预测具体事件`.trim();
 
 const AI_PHRASE_REPLACEMENTS = [
   [/根据你提供的信息/g, ''],
@@ -157,7 +155,7 @@ function toList(value) {
   }
   if (typeof value === 'string') {
     return value
-      .split(/[\n,，;；、]/)
+      .split(/[\n,，；、]/)
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -352,6 +350,26 @@ function buildPromptPayload({ chart, userInput, fallbackInput, userProfile }) {
   };
 }
 
+function buildReadingPrompt({ chart, input }) {
+  const narrative = getNarrative(chart);
+
+  return [
+    '【系统已提供的结构摘要】',
+    `- 核心状态：${textOf(narrative?.core_summary || chart?.coreSummary || chart?.core_summary, '未提供')}`,
+    `- 当前阶段：${textOf(narrative?.stage_summary || chart?.stageSummary || chart?.stage_summary, '未提供')}`,
+    `- 行动建议：${toList(narrative?.action_hints || chart?.actionHints || chart?.action_hints).join('；') || '未提供'}`,
+    `- 情绪提醒：${textOf(narrative?.emotional_hint || chart?.emotionalHint || chart?.emotional_hint, '未提供')}`,
+    `- 身强身弱：${getStrengthLevel(chart)}`,
+    `- 第一用神：${getPrimaryUseGod(chart)}`,
+    `- 当前大运主题：${getDayunTheme(chart)}`,
+    `- 当前流年主题：${getLiunianTheme(chart)}`,
+    `- 十神重点：${getTenGodSummary(chart)}`,
+    '',
+    '【前端当前请求】',
+    textOf(input, '未提供'),
+  ].join('\n');
+}
+
 function sanitizeAiResponse(text = '') {
   let output = textOf(text);
   AI_PHRASE_REPLACEMENTS.forEach(([pattern, replacement]) => {
@@ -387,12 +405,6 @@ async function runChat({ userProfile, message, chart }) {
 async function runReading({ instructions, input, chart, model = DEFAULT_MODEL }) {
   ensureOpenAIKey();
 
-  const promptPayload = buildPromptPayload({
-    chart,
-    userInput: input,
-    fallbackInput: input,
-  });
-
   const systemInstruction = textOf(instructions)
     ? `${SYSTEM_PROMPT}\n\n【前端补充要求】\n${textOf(instructions)}`
     : SYSTEM_PROMPT;
@@ -403,7 +415,7 @@ async function runReading({ instructions, input, chart, model = DEFAULT_MODEL })
     max_completion_tokens: 620,
     messages: [
       { role: 'system', content: systemInstruction },
-      { role: 'user', content: promptPayload.prompt },
+      { role: 'user', content: buildReadingPrompt({ chart, input }) },
     ],
   });
 
