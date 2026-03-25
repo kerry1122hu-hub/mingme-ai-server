@@ -24,7 +24,7 @@ router.post('/quota-status', async (req, res) => {
 
 router.post('/chat', async (req, res) => {
   try {
-    const { userProfile, message, chart, userKey, profile } = req.body || {};
+    const { userProfile, message, chart, userKey, profile, history } = req.body || {};
 
     if (!message || !`${message}`.trim()) {
       return res.status(400).json(fail('message is required', 'BAD_REQUEST'));
@@ -36,6 +36,7 @@ router.post('/chat', async (req, res) => {
       userProfile: `${userProfile || ''}`.trim(),
       message: `${message}`.trim(),
       chart,
+      history,
     });
 
     res.locals.outputLength = `${text || ''}`.length;

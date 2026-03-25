@@ -7,94 +7,33 @@ const client = new OpenAI({
 
 const DEFAULT_MODEL = 'gpt-4o-mini';
 
-const SYSTEM_PROMPT = `你是“明己”，一位基于四柱八字理论、用现代中文做人生节奏解读的个人成长顾问。
+const SYSTEM_PROMPT = `你是“明己”，一位基于四柱八字结构、但用现代中文和用户正常说话的个人成长顾问。
 
-【你的角色定位】
-你不是排盘器，也不是自由发挥的玄学老师。
-你只负责依据系统已经提供的结构化命理结果，结合用户当前提交的话题，输出有针对性、有人味、能落地的分析与建议。
-你必须尊重四柱八字、五行生克、十神、月令、身强身弱、用神忌神、大运流年等理论基础，但表达时不用神神叨叨的话，不堆术语，不端着，不像 AI。
+你的回答不是报告，也不是课堂讲解，而是一次真实对话。你要先接住用户这次在意的点，再结合系统给到的结构判断，帮他把问题说清楚。
 
-【你的唯一依据】
-你只能依据系统传入的信息来回答，例如：
-- 日主 / 日元
-- 月令 / 季节
-- 身强身弱结论
-- 五行分布与偏颇
-- 十神喜忌
-- 用神 / 忌神
-- 当前大运 / 流年主题
-- 阶段判断
-- narrative 结果：core_summary / stage_summary / action_hints / emotional_hint
-- 用户本次主动提交的话题、困惑、关系背景、问题重点
+【你要遵守的底线】
+1. 只能依据系统提供的结构化信息回答，不得自行补算或发明命理结论。
+2. 命理结构决定底层节奏，用户这次的话题决定回应重心。
+3. 不预测具体事件，不说宿命论，不制造恐吓感。
+4. 不要把五行、十神、大运流年当成术语堆给用户，要翻译成现实里的感受、关系、节奏和选择。
 
-如果系统没有提供某项判断，你不得自行补算，不得擅自发明命理结论，不得假装知道。
+【你说话的方式】
+1. 像一个见过事、能把话说明白的人，不像客服，不像模板。
+2. 允许先回应用户的情绪，再落到结构判断，不必每次都按固定三段式输出。
+3. 每次优先抓住一个最关键的点，说透就够，不要把所有结构都端上来。
+4. 回答长度以自然为准，通常 120-220 字；如果一句短一点更顺，就不要硬凑长度。
+5. 不要总用这些句式开头：
+   - “你现在真正卡住的是……”
+   - “你目前真正卡住的是……”
+   - “从命理上来看……”
+   - “这意味着……”
+   - “因此，建议你……”
+6. 如果用户是在追问上一句，就顺着上一轮往下说，不要重新起一篇小报告。
 
-【你的分析原则】
-1. 先看命理结构，再看用户话题
-- 命理结构决定底层节奏
-- 用户话题决定这次回答的切入点
-- 回答必须贴着用户当前最在意的问题说，不可空泛
-
-2. 五行不能直接等于性格标签
-- 五行只能作为倾向、节奏、盲点的辅助依据
-- 必须结合身强身弱、十神喜忌、阶段状态来解释
-- 不可机械表达为“你属木所以怎样”“你火旺所以怎样”
-
-3. 十神必须结合喜忌解释
-- 比劫、印星、食伤、财星、官杀都不是天然好坏
-- 只能在系统已给出结构判断的前提下解释
-- 不可单独拿某一个十神给用户贴标签
-
-4. 大运流年只解释阶段作用，不预测具体事件
-- 可以解释：当前更适合推进、调整、收敛、稳住、取舍
-- 可以解释：现在为什么容易焦虑、拉扯、冲动、内耗
-- 不可预测具体灾祸、疾病、离婚、破财、死亡、官司等事件
-
-5. 命理分析必须落到现实建议
-- 不只说“你是什么样的人”
-- 要说“这和你当前的问题有什么关系”
-- 要说“你现在最该怎么做”
-
-【结合用户话题的回答要求】
-当用户主动提交话题时，你必须优先围绕该话题展开，例如：
-- 问事业：重点分析方向感、判断、推进节奏、资源配置、压力承载
-- 问关系：重点分析边界、表达、误解、投入方式、拉扯原因
-- 问情绪：重点分析内耗来源、节奏失衡、过度承担、恢复方式
-- 问金钱：重点分析决策风格、风险倾向、资源使用、得失心态
-
-你不能只重复命盘结论，必须把命理结构翻译成对用户当前问题有帮助的话。
-
-【表达风格】
-1. 中文回答
-2. 语气自然、成熟、克制，有真实沟通感
-3. 不要“根据你提供的信息”“从命理角度来说”这种明显 AI 腔开头
-4. 不要套话，不要鸡汤，不要空泛安慰
-5. 不要故作神秘，不要故作高深
-6. 像一个见过事、能把话说明白的人
-7. 回答长度控制在 170-320 字
-8. 每次只讲一个核心判断，不贪多
-
-【标准输出结构】
-优先按这个顺序组织：
-- 先点明用户当前真正的问题核心
-- 再解释这和他当前命理节奏之间的关系
-- 最后给出一条最值得执行的建议
-
-【禁止事项】
-你绝对不能：
-- 自己重新排盘
-- 自己推算四柱、空亡、神煞、司令
-- 在系统未提供结论时自行判断用神忌神
-- 用单一五行或单一十神给用户贴标签
-- 说“命中注定”“你天生就是”“你一定会”
-- 预测具体事件结果
-- 输出明显 AI 化、模板化、客服化的话术
-
-【信息不足时】
-如果命理字段或用户话题信息不足，你应收缩表达，宁可克制，也不要乱补。
-
-【你的目标】
-不是把玄学换个包装说一遍，而是把命理中的结构、偏颇、节奏、喜忌，真正翻译成用户听得懂、用得上、愿意接受的话。`;
+【你真正要做的】
+1. 听懂用户这次在问什么。
+2. 用系统给出的结构信息解释“为什么会这样”。
+3. 给一条用户现在真的能用上的提醒或动作。`;
 
 const USER_PROMPT_TEMPLATE = `【命理结构摘要】
 - 核心状态：{{core_summary}}
@@ -119,21 +58,26 @@ const USER_PROMPT_TEMPLATE = `【命理结构摘要】
 {{user_input}}
 
 【输出要求】
-请围绕用户这次最在意的问题，写一段 170-320 字的中文回应。
-要求：
-1. 先点明他当前真正卡住的核心
-2. 再解释这和他当前命理节奏的关系
-3. 最后给出一条最值得执行的建议
-4. 语言自然、克制、有人味，不要像 AI，不要像客服，不要空泛安慰
-5. 不要堆术语，不要宿命化，不要预测具体事件`.trim();
+请像一次真实聊天那样回应用户：
+先回应他这次最在意的点，再自然带出这和当前结构节奏的关系，最后收在一条有用的提醒或建议上。
+不要固定分段，不要模板化，不要故作高深。
+不要使用“你现在真正卡住的是 / 从命理上来看 / 这意味着 / 因此建议你”这一类固定句式。
+不要使用 1、2、3 或首先其次最后这种编号式表达。
+不要堆术语，不要宿命化，不要预测具体事件。`.trim();
 
 const AI_PHRASE_REPLACEMENTS = [
   [/根据你提供的信息/g, ''],
   [/从命理角度来看/g, ''],
+  [/从命理上来看/g, '放回你现在这段节奏里看，'],
   [/综合来看/g, ''],
   [/首先|其次|最后/g, ''],
   [/这表明/g, '这更像是'],
   [/你需要注意的是/g, '你真正要注意的是'],
+  [/^你现在真正卡住的是/g, '你眼下更难受的地方其实是'],
+  [/^你目前真正卡住的是/g, '你眼下更难受的地方其实是'],
+  [/^这意味着/g, '更像是在提醒你'],
+  [/^因此，建议你/g, '更实际一点的做法是'],
+  [/^因此建议你/g, '更实际一点的做法是'],
   [/希望对你有所帮助。?/g, ''],
   [/愿你越来越好。?/g, ''],
   [/相信你会找到答案。?/g, ''],
@@ -314,15 +258,15 @@ function detectTopicFocus(userInput = '', topicType = 'career') {
 
   const shortText = text.replace(/[。！？!?,，；;：:]+/g, '，').slice(0, 34);
   if (topicType === 'relationship') {
-    return '这次你最在意的，是关系里的相处和回应是否还值得继续。' + (shortText ? '问题核心接近：' + shortText : '');
+    return '关系里的相处、回应和去留判断' + (shortText ? `；原话重点：${shortText}` : '');
   }
   if (topicType === 'emotion') {
-    return '这次你真正想理清的，是自己为什么会越来越累、越来越耗。' + (shortText ? '问题核心接近：' + shortText : '');
+    return '情绪消耗、恢复能力和节奏失衡' + (shortText ? `；原话重点：${shortText}` : '');
   }
   if (topicType === 'money') {
-    return '这次你最担心的，是金钱判断和风险节奏有没有失衡。' + (shortText ? '问题核心接近：' + shortText : '');
+    return '金钱判断、风险节奏和安全感' + (shortText ? `；原话重点：${shortText}` : '');
   }
-  return '这次你真正卡住的，是方向、节奏和取舍还没有完全想清楚。' + (shortText ? '问题核心接近：' + shortText : '');
+  return '方向、节奏和取舍判断' + (shortText ? `；原话重点：${shortText}` : '');
 }
 
 function buildLLMUserPrompt(input) {
@@ -367,6 +311,28 @@ function buildPromptPayload({ chart, userInput, fallbackInput, userProfile }) {
   };
 }
 
+function buildChatContext({ chart, userInput, fallbackInput, userProfile }) {
+  const narrative = getNarrative(chart);
+  const rawInput = textOf(userInput) || textOf(fallbackInput) || textOf(userProfile) || '未提供';
+  const topicType = detectTopicType(rawInput);
+  const topicFocus = detectTopicFocus(rawInput, topicType);
+  const lines = [
+    '以下是这位用户当前对话可参考的背景，只用于帮助你理解，不要照着复述。',
+    `- 当前话题类型：${topicType}`,
+    `- 当前问题焦点：${topicFocus}`,
+    `- 核心状态：${textOf(narrative?.core_summary || chart?.coreSummary || chart?.core_summary, '未提供')}`,
+    `- 当前阶段：${textOf(narrative?.stage_summary || chart?.stageSummary || chart?.stage_summary, '未提供')}`,
+    `- 行动建议：${toList(narrative?.action_hints || chart?.actionHints || chart?.action_hints).join('；') || '未提供'}`,
+    `- 情绪提醒：${textOf(narrative?.emotional_hint || chart?.emotionalHint || chart?.emotional_hint, '未提供')}`,
+    `- 日元状态：${getStrengthLevel(chart)}`,
+    `- 当前主用神：${getPrimaryUseGod(chart)}`,
+    `- 当前阶段主线：${getDayunTheme(chart)}`,
+    `- 当前年度主题：${getLiunianTheme(chart)}`,
+    `- 十神重点：${getTenGodSummary(chart) || '未提供'}`,
+  ];
+  return lines.join('\n');
+}
+
 function buildReadingPrompt({ chart, input }) {
   const narrative = getNarrative(chart);
 
@@ -392,14 +358,32 @@ function sanitizeAiResponse(text = '') {
   AI_PHRASE_REPLACEMENTS.forEach(([pattern, replacement]) => {
     output = output.replace(pattern, replacement);
   });
+  output = output
+    .replace(/^\s*[1-3][、.．)\]]\s*/gm, '')
+    .replace(/^\s*第[一二三123]+[点条]\s*/gm, '')
+    .replace(/^\s*首先[，,:：]?\s*/gm, '')
+    .replace(/^\s*其次[，,:：]?\s*/gm, '')
+    .replace(/^\s*最后[，,:：]?\s*/gm, '');
   output = output.replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
   return output;
 }
 
-async function runChat({ userProfile, message, chart }) {
+function buildHistoryMessages(history = []) {
+  return (Array.isArray(history) ? history : [])
+    .slice(-6)
+    .map((item) => {
+      const role = item?.role === 'assistant' ? 'assistant' : 'user';
+      const content = textOf(item?.content);
+      if (!content) return null;
+      return { role, content };
+    })
+    .filter(Boolean);
+}
+
+async function runChat({ userProfile, message, chart, history = [] }) {
   ensureOpenAIKey();
 
-  const promptPayload = buildPromptPayload({
+  const chatContext = buildChatContext({
     chart,
     userInput: message,
     fallbackInput: userProfile,
@@ -408,11 +392,16 @@ async function runChat({ userProfile, message, chart }) {
 
   const response = await client.chat.completions.create({
     model: DEFAULT_MODEL,
-    temperature: 0.88,
-    max_completion_tokens: 680,
+    temperature: 0.95,
+    max_completion_tokens: 520,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: promptPayload.prompt },
+      {
+        role: 'system',
+        content: `${chatContext}\n\n这次回答时，不要把上面这些背景整理成报告，也不要逐项解释。只把它们当作理解用户的底层背景。优先顺着用户刚说的话自然往下聊。`,
+      },
+      ...buildHistoryMessages(history),
+      { role: 'user', content: textOf(message) },
     ],
   });
 
