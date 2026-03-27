@@ -1,5 +1,10 @@
 ﻿const OpenAI = require('openai');
 const { File } = require('buffer');
+const {
+  getMemberMemory,
+  updateMemberMemory,
+  buildMemberMemoryContext,
+} = require('./memory_service');
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -39,6 +44,11 @@ const MASTER_PERSONA_BASE = `【角色设定】
    - 财富层次（正财偏财区分）
    - 婚姻趋势（现代关系重构）
    - 子女教育（食伤现代意义）
+6. 风水助运与灵性护持
+   - 风水助运（环境、方位、起居与随身配置）
+   - 助运逻辑（护身/招财/贵人/定心/提势/执行力）
+   - 小众灵性实践（刺符、经文符、护身符、招财符）
+   - 泰国经文符取向（左右手、前后背、功能主次与轻重）
 
 【批命思维五步法】
 1. 定旺衰：先察日主在月令的得失，再看得地、得势。
@@ -113,7 +123,8 @@ const SYSTEM_PROMPT_COMPANION = `${MASTER_PERSONA_BASE}
 4. 可以直接说出专业判断，例如“庚金七杀压身”“丁火食神透出”“流年催动财星”，但后面要补一句现代解释。
 5. 不要像客服，不要像教科书，不要每轮都重新起一篇报告。
 6. 用户如果直接问运势、财运、感情、时机、开运、灵性诉求，就直接分析，不要先绕开问题。
-7. 只有在关键信息真的缺失、而且追问会显著改变判断时，才可以补问一句；否则直接回答。`;
+7. 若用户问风水、助运、刺符、泰国经文符、护身符、招财符等，要先判断其诉求更偏护身、招财、贵人、定心、提势，还是执行力，再结合本命与运势给搭配逻辑。
+8. 只有在关键信息真的缺失、而且追问会显著改变判断时，才可以补问一句；否则直接回答。`;
 
 const SYSTEM_PROMPT_READING = `${MASTER_PERSONA_BASE}
 
@@ -128,6 +139,7 @@ const SYSTEM_PROMPT_READING = `${MASTER_PERSONA_BASE}
 6. 长度自然即可，不要为了控字数故意反问用户。
 7. 用户问运势、财运、感情、时机，就直接围绕问题本身展开，不要先绕一圈确认意图。
 8. 若用户直接问八字本身，可优先按“定旺衰、明格局、寻用神、查刑冲、看岁运”的顺序组织。
+9. 若用户问风水、助运、刺符、经文符、护身与招财类诉求，要直接给出“更适合补什么、避什么、为何如此”的判断，不要只做空泛劝说。
 
 回答可以完整，但不要模板化，也不要宿命化。`;
 
@@ -771,15 +783,51 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile }) {
     `- 当前阶段主线：${getDayunTheme(chart)}`,
     `- 当前年度主题：${getLiunianTheme(chart)}`,
     `- 十神重点：${getTenGodSummary(chart) || '未提供'}`,
+    '- 灵性与助运判断：若用户问风水、开运、刺符、护身、招财、贵人、泰国经文符等，不要只当成泛财运问题，要判断其诉求更偏护身、聚财、贵人、定心、提势，还是执行力。',
+    '- 小众经文符线索：若提到泰国经文符、刺符、宝袋、莲花经、帝王龙、左右手或前后背搭配，要从“立势、护运、起势、收局、聚财、稳心”的结构来解释。',
     '- 解释要求：可以直接使用四柱八字、五行生克、十神、大运流年等术语，但每次都要顺手翻译成现代语，让用户明白这和当前的压力、关系、节奏、选择、行动有什么关系。',
   ];
   return lines.join('\n');
 }
 
-function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, history = [], entrySource = 'chat_tab' }) {
+function mergeSessionMemory(baseMemory = {}, persistedMemory = {}) {
+  return {
+    last_core_judgment: textOf(baseMemory.last_core_judgment || persistedMemory.lastCoreJudgment),
+    last_action_given: textOf(baseMemory.last_action_given || persistedMemory.lastActionGiven),
+    last_open_loop: textOf(baseMemory.last_open_loop || persistedMemory.lastOpenLoop),
+    user_followed_or_not: textOf(baseMemory.user_followed_or_not || '未提供'),
+    recent_mood_trend: textOf(baseMemory.recent_mood_trend || persistedMemory.recentMoodTrend || 'unknown'),
+  };
+}
+
+function deriveMemoryWriteback({
+  reply = '',
+  topicType = '',
+  intentType = '',
+  followUpAnchor = '',
+}) {
+  const text = textOf(reply);
+  const firstSentence = text
+    .split(/[。！？\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)[0] || '';
+  const actionMatch = text.match(/(先把[^。！？\n]{0,40}|更实际一点的做法是[^。！？\n]{0,50}|你现在先[^。！？\n]{0,40}|这一步更重要的是[^。！？\n]{0,50})/);
+
+  return {
+    topicType,
+    intentType,
+    coreJudgment: firstSentence,
+    actionGiven: textOf(actionMatch?.[0]),
+    lastOpenLoop: followUpAnchor,
+    recentMoodTrend: /(缓下来|稳住|轻一点|松一点)/.test(text) ? 'up' : 'unknown',
+  };
+}
+
+function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, history = [], entrySource = 'chat_tab', persistedMemberMemory = null }) {
   const narrative = getNarrative(chart);
   const rawInput = textOf(userInput) || textOf(fallbackInput) || textOf(userProfile) || '未提供';
-  const sessionMemory = buildSessionMemory(history);
+  const localSessionMemory = buildSessionMemory(history);
+  const sessionMemory = mergeSessionMemory(localSessionMemory, persistedMemberMemory?.sessionMemory);
   const hasOpenLoop = Boolean(sessionMemory.last_open_loop);
   const mode = chooseMode({ entrySource, hasOpenLoop });
   const intentType = detectIntent(rawInput, hasOpenLoop);
@@ -805,6 +853,7 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
     topicType,
     topicFocus,
     sessionMemory,
+    persistedMemberMemory,
     stateDecision,
     followUpAnchor,
     prompt: USER_PROMPT_TEMPLATE_COMPANION
@@ -831,7 +880,8 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
       .replace('{{user_followed_or_not}}', textOf(sessionMemory.user_followed_or_not, '未提供'))
       .replace('{{recent_mood_trend}}', textOf(sessionMemory.recent_mood_trend, '未提供'))
       .replace('{{user_input}}', rawInput)
-      .concat(`\n\n【续聊锚点】\n${followUpAnchor}`),
+      .concat(`\n\n【续聊锚点】\n${followUpAnchor}`)
+      .concat(persistedMemberMemory?.enabled ? `\n\n${buildMemberMemoryContext(persistedMemberMemory)}` : ''),
   };
 }
 
@@ -882,8 +932,9 @@ function buildHistoryMessages(history = []) {
     .filter(Boolean);
 }
 
-async function runChat({ userProfile, message, chart, history = [] }) {
+async function runChat({ userProfile, message, chart, history = [], userKey, profile, memberTier = 'free' }) {
   ensureOpenAIKey();
+  const memberMemory = getMemberMemory({ userKey, chart, memberTier });
 
   const chatContext = buildChatContext({
     chart,
@@ -898,6 +949,7 @@ async function runChat({ userProfile, message, chart, history = [] }) {
     userProfile,
     history,
     entrySource: 'chat_tab',
+    persistedMemberMemory: memberMemory,
   });
 
   const response = await client.chat.completions.create({
@@ -916,7 +968,23 @@ async function runChat({ userProfile, message, chart, history = [] }) {
     ],
   });
 
-  return sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
+  const sanitized = sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
+  updateMemberMemory({
+    userKey,
+    chart,
+    memberTier,
+    userMessage: message,
+    assistantReply: sanitized,
+    route: deriveMemoryWriteback({
+      reply: sanitized,
+      topicType: companionPrompt.topicType,
+      intentType: companionPrompt.intentType,
+      followUpAnchor: companionPrompt.followUpAnchor,
+    }),
+    followUpAnchor: companionPrompt.followUpAnchor,
+  });
+
+  return sanitized;
 }
 
 async function runReading({ instructions, input, chart, model = DEFAULT_MODEL }) {

@@ -36,6 +36,9 @@ router.post('/chat', async (req, res) => {
       userProfile: `${userProfile || ''}`.trim(),
       message: `${message}`.trim(),
       chart,
+      userKey,
+      profile,
+      memberTier: quota.memberTier,
       history,
     });
 
