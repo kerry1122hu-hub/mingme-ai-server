@@ -311,13 +311,98 @@ function getLiunianPillar(chart) {
   return `${textOf(chart?.liuNianPillar?.gan)}${textOf(chart?.liuNianPillar?.zhi)}`;
 }
 
-function getCurrentDayun(chart) {
+function getBirthYearFromChart(chart) {
+  const candidates = [
+    chart?.birthInfo?.year,
+    chart?.profile?.birth_year,
+    chart?.profile?.year,
+    chart?.solar?.year,
+    chart?.lunar?.solarYear,
+  ];
+
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed) && parsed > 1900) return parsed;
+  }
+  return null;
+}
+
+function formatDaYunEntry(entry) {
+  if (!entry) return '';
+  if (typeof entry === 'string') return textOf(entry);
   return (
-    `${textOf(chart?.daYun?.[0]?.gan)}${textOf(chart?.daYun?.[0]?.zhi)}` ||
-    `${textOf(chart?.currentDaYun?.gan)}${textOf(chart?.currentDaYun?.zhi)}` ||
-    textOf(chart?.currentDaYun?.ganZhi) ||
+    textOf(entry?.ganZhi) ||
+    textOf(entry?.ganzhi) ||
+    textOf(entry?.label) ||
+    textOf(entry?.title) ||
+    textOf(entry?.name) ||
+    textOf(entry?.pillar) ||
+    textOf(entry?.value) ||
+    `${textOf(entry?.gan)}${textOf(entry?.zhi)}` ||
+    `${textOf(entry?.stem)}${textOf(entry?.branch)}`
+  );
+}
+
+function getResolvedCurrentDaYunEntry(chart) {
+  const explicit = chart?.currentDaYun || chart?.currentDayun || null;
+  if (formatDaYunEntry(explicit)) return explicit;
+
+  const list = Array.isArray(chart?.daYun) ? chart.daYun : [];
+  if (!list.length) return null;
+
+  const birthYear = getBirthYearFromChart(chart);
+  const currentYear = new Date().getFullYear();
+  const currentAge = birthYear ? currentYear - birthYear : null;
+
+  if (typeof currentAge === 'number') {
+    const matched = list.find((item) => {
+      const startAge = Number(item?.startAge);
+      const endAge = Number(item?.endAge);
+      return !Number.isNaN(startAge) && !Number.isNaN(endAge) && currentAge >= startAge && currentAge <= endAge;
+    });
+    if (matched && formatDaYunEntry(matched)) return matched;
+  }
+
+  return list.find((item) => formatDaYunEntry(item)) || list[0] || null;
+}
+
+function getCurrentDayun(chart) {
+  const currentDaYun = getResolvedCurrentDaYunEntry(chart);
+  const dayunFromList = Array.isArray(chart?.daYun) ? chart.daYun[0] : null;
+  return (
+    textOf(chart?.currentDaYunLabel) ||
+    textOf(chart?.currentDayunLabel) ||
+    formatDaYunEntry(currentDaYun) ||
+    formatDaYunEntry(dayunFromList) ||
     '未明确'
   );
+}
+
+function getCurrentDayunAgeRange(chart) {
+  const currentDaYun = getResolvedCurrentDaYunEntry(chart);
+  const dayunFromList = Array.isArray(chart?.daYun) ? chart.daYun[0] : null;
+  const startAge = currentDaYun?.startAge ?? dayunFromList?.startAge;
+  const endAge = currentDaYun?.endAge ?? dayunFromList?.endAge;
+  if (startAge == null && endAge == null) return '';
+  return `${startAge ?? '--'}-${endAge ?? '--'}岁`;
+}
+
+function isCorrectionMessage(text = '') {
+  return /(不对|说错了|你错了|答非所问|重新说|重新断|重算|不是这个)/.test(textOf(text));
+}
+
+function isDayunQuestion(text = '') {
+  return /(大运|这步运|当前这步运|现走什么运|走什么大运)/.test(textOf(text));
+}
+
+function shouldForceDayunCorrection(userInput = '', history = []) {
+  if (!isCorrectionMessage(userInput)) return false;
+  const userMessages = (Array.isArray(history) ? history : [])
+    .filter((item) => item?.role === 'user')
+    .map((item) => textOf(item?.content))
+    .filter(Boolean);
+  const lastRelevant = [...userMessages].reverse().find((item) => !isCorrectionMessage(item));
+  return isDayunQuestion(lastRelevant);
 }
 
 function getNaYin(chart) {
@@ -757,11 +842,14 @@ function buildPromptPayload({ chart, userInput, fallbackInput, userProfile }) {
   };
 }
 
-function buildChatContext({ chart, userInput, fallbackInput, userProfile }) {
+function buildChatContext({ chart, userInput, fallbackInput, userProfile, history = [] }) {
   const narrative = getNarrative(chart);
   const rawInput = textOf(userInput) || textOf(fallbackInput) || textOf(userProfile) || '未提供';
   const topicType = detectTopicType(rawInput);
   const topicFocus = detectTopicFocus(rawInput, topicType);
+  const currentDayun = getCurrentDayun(chart);
+  const currentDayunAgeRange = getCurrentDayunAgeRange(chart);
+  const forceDayunCorrection = shouldForceDayunCorrection(rawInput, history);
   const lines = [
     '以下是这位用户当前对话可参考的背景，只用于帮助你理解，不要照着复述。',
     `- 当前话题类型：${topicType}`,
@@ -772,7 +860,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile }) {
     `- 五行分布：${getWxCountText(chart)}`,
     `- 今日日柱：${getTodayPillar(chart) || '未明确'}`,
     `- 今日与日主关系：${getTodayRelation(chart)}`,
-    `- 当前大运：${getCurrentDayun(chart)}`,
+    `- 当前大运：${currentDayun}${currentDayunAgeRange ? `（约${currentDayunAgeRange}）` : ''}`,
     `- 当前流年：${getLiunianPillar(chart) || '未明确'}`,
     `- 核心状态：${textOf(narrative?.core_summary || chart?.coreSummary || chart?.core_summary, '未提供')}`,
     `- 当前阶段：${textOf(narrative?.stage_summary || chart?.stageSummary || chart?.stage_summary, '未提供')}`,
@@ -786,6 +874,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile }) {
     '- 灵性与助运判断：若用户问风水、开运、刺符、护身、招财、贵人、泰国经文符等，不要只当成泛财运问题，要判断其诉求更偏护身、聚财、贵人、定心、提势，还是执行力。',
     '- 小众经文符线索：若提到泰国经文符、刺符、宝袋、莲花经、帝王龙、左右手或前后背搭配，要从“立势、护运、起势、收局、聚财、稳心”的结构来解释。',
     '- 解释要求：可以直接使用四柱八字、五行生克、十神、大运流年等术语，但每次都要顺手翻译成现代语，让用户明白这和当前的压力、关系、节奏、选择、行动有什么关系。',
+    forceDayunCorrection ? `- 纠偏要求：用户刚才是在纠正“大运”这一层。请直接按当前年龄和现有大运表重报当前这步大运为“${currentDayun}${currentDayunAgeRange ? `（约${currentDayunAgeRange}）` : ''}”，不要重复上一句旧解释。` : '',
   ];
   return lines.join('\n');
 }
@@ -972,6 +1061,7 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
     userInput: message,
     fallbackInput: userProfile,
     userProfile,
+    history,
   });
   const companionPrompt = buildCompanionPrompt({
     chart,
