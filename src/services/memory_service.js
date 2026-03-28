@@ -82,9 +82,10 @@ function extractComparedOptions(userMessage = '', assistantReply = '') {
   const source = `${userMessage} ${assistantReply}`;
   const match = source.match(/(.{1,24})还是(.{1,24})/);
   if (!match) return [];
+
   return uniqStrings([
-    match[1].replace(/[？?！!。，“”"]/g, '').trim(),
-    match[2].replace(/[？?！!。，“”"]/g, '').trim(),
+    match[1].replace(/[，。、“”"'`]/g, '').trim(),
+    match[2].replace(/[，。、“”"'`]/g, '').trim(),
   ]);
 }
 
@@ -92,22 +93,26 @@ function extractPainPoints(userMessage = '') {
   const points = [];
   const text = textOf(userMessage);
   if (!text) return points;
-  if (/(焦虑|压力|崩溃|难受|睡不着|心里堵)/.test(text)) points.push('情绪压力高');
-  if (/(钱留不住|留不住钱|财运差|财路不稳|收入不稳)/.test(text)) points.push('财路不稳');
-  if (/(感情|关系|婚姻|对象|复合|桃花)/.test(text)) points.push('关系反复');
-  if (/(纠结|犹豫|想太多|拿不定主意)/.test(text)) points.push('决策反复');
-  if (/(刺符|开运|护身|经文符|泰国)/.test(text)) points.push('灵性助运诉求');
+
+  if (/(焦虑|压力|崩溃|难受|睡不着|心里堵|内耗|很累|撑不住)/.test(text)) points.push('情绪压力高');
+  if (/(钱留不住|留不住钱|财运差|财路不稳|收入不稳|回款慢|现金流)/.test(text)) points.push('财路不稳');
+  if (/(感情|关系|婚姻|对象|复合|桃花|夫妻宫)/.test(text)) points.push('关系反复');
+  if (/(纠结|犹豫|想太多|拿不定主意|该不该|值不值得)/.test(text)) points.push('决策反复');
+  if (/(刺符|开运|护身|经文符|泰国|风水|招财符)/.test(text)) points.push('灵性助运诉求');
+
   return points;
 }
 
 function extractLongTermFocus(userMessage = '', topicType = '') {
   const tags = [];
   const text = textOf(userMessage);
+
   if (topicType) tags.push(topicType);
-  if (/(财运|偏财|正财|进财|守财|赚钱)/.test(text)) tags.push('财运');
-  if (/(感情|关系|婚姻|对象|桃花)/.test(text)) tags.push('感情');
-  if (/(事业|工作|创业|项目|扩张|方向)/.test(text)) tags.push('事业');
-  if (/(刺符|开运|护身|经文符|泰国|风水)/.test(text)) tags.push('灵性助运');
+  if (/(财运|偏财|正财|进财|守财|赚钱|收入)/.test(text)) tags.push('财运');
+  if (/(感情|关系|婚姻|对象|桃花|夫妻宫)/.test(text)) tags.push('感情');
+  if (/(事业|工作|创业|项目|扩张|方向|大运)/.test(text)) tags.push('事业');
+  if (/(刺符|开运|护身|经文符|泰国|风水|贵人符)/.test(text)) tags.push('灵性助运');
+
   return uniqStrings(tags);
 }
 
@@ -119,13 +124,13 @@ function inferPreferencePatch(userMessage = '', assistantReply = '') {
     patch.likesStrongConclusion = true;
     patch.avoidVerboseTemplate = true;
   }
-  if (/(大师|玄学|命理|子平|术语)/.test(source)) {
+  if (/(大师|玄学|命理|子平|术语|格局|时运)/.test(source)) {
     patch.likesMysticLanguage = true;
   }
-  if (/(讲人话|现代一点|说明白|现实一点)/.test(source)) {
+  if (/(讲人话|现代一点|说明白点|现实一点)/.test(source)) {
     patch.likesModernExplanation = true;
   }
-  if (/(哪个好|哪个更适合|选哪个|还是)/.test(source)) {
+  if (/(哪个更好|哪个更适合|选哪个|还是)/.test(source)) {
     patch.likesComparisonAnswer = true;
   }
   if (/(可以问我|可以追问|你可以继续问)/.test(source)) {
@@ -330,9 +335,10 @@ function buildMemberMemoryContext(memory = {}) {
   const preferenceSummary = [
     memory.responsePreference?.likesStrongConclusion ? '更喜欢直接结论' : '',
     memory.responsePreference?.likesMysticLanguage ? '接受玄学术语' : '',
-    memory.responsePreference?.likesModernExplanation ? '希望有现代解释' : '',
+    memory.responsePreference?.likesModernExplanation ? '希望带现代解释' : '',
+    memory.responsePreference?.likesComparisonAnswer ? '喜欢明确比较' : '',
     memory.responsePreference?.avoidVerboseTemplate ? '不喜欢模板腔' : '',
-  ].filter(Boolean).join('；') || '未积累';
+  ].filter(Boolean).join('、') || '未积累';
 
   return [
     '【会员专属记忆】',
@@ -347,8 +353,56 @@ function buildMemberMemoryContext(memory = {}) {
   ].join('\n');
 }
 
+function getMemberMemoryAdmin({ userKey, chart, memberTier = 'premium' }) {
+  return getMemberMemory({ userKey, chart, memberTier });
+}
+
+function listMemberMemories({ limit = 100 } = {}) {
+  const normalizedLimit = Math.max(1, Math.min(Number(limit || 100), 300));
+  const rows = db.prepare(`
+    SELECT
+      session.user_key AS user_key,
+      session.last_topic_type AS last_topic_type,
+      session.last_intent_type AS last_intent_type,
+      session.last_core_judgment AS last_core_judgment,
+      session.last_action_given AS last_action_given,
+      session.last_open_loop AS last_open_loop,
+      session.last_compared_options AS last_compared_options,
+      session.last_terminology_asked AS last_terminology_asked,
+      session.recent_mood_trend AS recent_mood_trend,
+      session.last_conversation_at AS last_conversation_at,
+      profile.long_term_focus AS long_term_focus,
+      profile.recurring_pain_points AS recurring_pain_points,
+      profile.spiritual_preference AS spiritual_preference,
+      profile.preferred_tone AS preferred_tone,
+      profile.preferred_depth AS preferred_depth,
+      pref.likes_strong_conclusion AS likes_strong_conclusion,
+      pref.likes_mystic_language AS likes_mystic_language,
+      pref.likes_modern_explanation AS likes_modern_explanation,
+      pref.likes_comparison_answer AS likes_comparison_answer,
+      pref.likes_followup_question AS likes_followup_question,
+      pref.avoid_verbose_template AS avoid_verbose_template
+    FROM member_session_memory AS session
+    LEFT JOIN member_profile_memory AS profile
+      ON profile.user_key = session.user_key
+    LEFT JOIN member_response_preference AS pref
+      ON pref.user_key = session.user_key
+    ORDER BY session.last_conversation_at DESC
+    LIMIT ?
+  `).all(normalizedLimit);
+
+  return rows.map((row) => ({
+    userKey: row.user_key,
+    sessionMemory: normalizeSessionRow(row),
+    profileMemory: normalizeProfileRow(row),
+    responsePreference: normalizePreferenceRow(row),
+  }));
+}
+
 module.exports = {
   getMemberMemory,
   updateMemberMemory,
   buildMemberMemoryContext,
+  getMemberMemoryAdmin,
+  listMemberMemories,
 };

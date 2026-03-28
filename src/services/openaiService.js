@@ -846,6 +846,7 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
     lastAction: sessionMemory.last_action_given,
     userInput: rawInput,
   });
+  const memberPreferenceInstruction = buildMemberPreferenceInstruction(persistedMemberMemory);
 
   return {
     mode,
@@ -881,7 +882,8 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
       .replace('{{recent_mood_trend}}', textOf(sessionMemory.recent_mood_trend, '未提供'))
       .replace('{{user_input}}', rawInput)
       .concat(`\n\n【续聊锚点】\n${followUpAnchor}`)
-      .concat(persistedMemberMemory?.enabled ? `\n\n${buildMemberMemoryContext(persistedMemberMemory)}` : ''),
+      .concat(persistedMemberMemory?.enabled ? `\n\n${buildMemberMemoryContext(persistedMemberMemory)}` : '')
+      .concat(memberPreferenceInstruction ? `\n\n${memberPreferenceInstruction}` : ''),
   };
 }
 
@@ -918,6 +920,35 @@ function sanitizeAiResponse(text = '') {
     .replace(/^\s*最后[，,:：]?\s*/gm, '');
   output = output.replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
   return output;
+}
+
+function buildMemberPreferenceInstruction(memory = {}) {
+  if (!memory?.enabled || !memory?.responsePreference) return '';
+
+  const pref = memory.responsePreference;
+  const profileMemory = memory.profileMemory || {};
+  const lines = ['【会员回答偏好】'];
+
+  if (pref.likesStrongConclusion || profileMemory.preferredTone === 'direct') {
+    lines.push('- 这位会员偏好先给结论，再展开，不喜欢绕。');
+  }
+  if (pref.avoidVerboseTemplate || profileMemory.preferredDepth === 'short') {
+    lines.push('- 这位会员不喜欢模板腔，回答要收束，不要像标准范文。');
+  }
+  if (pref.likesMysticLanguage) {
+    lines.push('- 这位会员接受命理术语，可以适当保留子平法、十神、岁运、格局等说法。');
+  }
+  if (pref.likesModernExplanation) {
+    lines.push('- 术语之后要顺手翻成现代语，让用户听得懂现实含义。');
+  }
+  if (pref.likesComparisonAnswer) {
+    lines.push('- 遇到比较题时，要明确站队，不要和稀泥。');
+  }
+  if (pref.likesFollowupQuestion) {
+    lines.push('- 若确有必要，可以留一句顺势追问，但不要问卷式追问。');
+  }
+
+  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 function buildHistoryMessages(history = []) {
