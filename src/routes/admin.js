@@ -5,6 +5,8 @@ const {
   setExtraQuota,
   listUsageOverview,
   listMemberships,
+  DB_FILE,
+  DATA_DIR,
 } = require('../services/quotaService');
 const {
   getMemberMemoryAdmin,
@@ -45,6 +47,28 @@ router.get('/api/member-memories', (req, res) => {
     const items = listMemberMemories({ limit: req.query?.limit || 100 });
     res.locals.outputLength = JSON.stringify(items).length;
     return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/storage-status', (req, res) => {
+  try {
+    const dbFile = `${DB_FILE || ''}`;
+    const dataDir = `${DATA_DIR || ''}`;
+    const persistent = dbFile.startsWith('/data/') || dataDir.startsWith('/data/');
+    const fallbackTmp = dbFile.startsWith('/tmp/') || dataDir.startsWith('/tmp/');
+    const storage = {
+      dbFile,
+      dataDir,
+      persistent,
+      fallbackTmp,
+      statusText: persistent ? '已使用持久化磁盘' : (fallbackTmp ? '当前仍在临时目录 /tmp' : '当前为自定义目录'),
+    };
+
+    res.locals.outputLength = JSON.stringify(storage).length;
+    return res.json(ok({ storage }));
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
@@ -144,6 +168,10 @@ router.get('/ai-usage', (req, res) => {
     .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
     .memory-panel { margin-top: 12px; padding: 14px; border-radius: 16px; background: rgba(245,251,249,0.88); border: 1px solid rgba(117, 170, 160, 0.18); }
     .memory-line + .memory-line { margin-top: 8px; }
+    .storage-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 18px; }
+    .storage-card { background: rgba(255,255,255,.82); border-radius: 18px; padding: 14px; border: 1px solid rgba(117, 170, 160, 0.18); }
+    .storage-label { font-size: 12px; color: #66807c; margin-bottom: 6px; }
+    .storage-value { font-size: 14px; line-height: 1.6; color: #18322e; word-break: break-all; }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .row, .row3 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -155,6 +183,20 @@ router.get('/ai-usage', (req, res) => {
       <div class="toolbar">
         <input id="dateKey" type="date" />
         <button id="reloadBtn">刷新今日数据</button>
+      </div>
+      <div class="storage-grid">
+        <div class="storage-card">
+          <div class="storage-label">SQLite 路径</div>
+          <div class="storage-value mono" id="dbFileValue">加载中...</div>
+        </div>
+        <div class="storage-card">
+          <div class="storage-label">数据目录</div>
+          <div class="storage-value mono" id="dataDirValue">加载中...</div>
+        </div>
+        <div class="storage-card">
+          <div class="storage-label">持久化状态</div>
+          <div class="storage-value" id="storageStatusValue">加载中...</div>
+        </div>
       </div>
       <div class="status" id="topStatus"></div>
     </div>
@@ -250,6 +292,9 @@ router.get('/ai-usage', (req, res) => {
     const memoryBody = document.getElementById('memoryBody');
     const dateInput = document.getElementById('dateKey');
     const topStatus = document.getElementById('topStatus');
+    const dbFileValue = document.getElementById('dbFileValue');
+    const dataDirValue = document.getElementById('dataDirValue');
+    const storageStatusValue = document.getElementById('storageStatusValue');
     const saveStatus = document.getElementById('saveStatus');
     const quotaStatus = document.getElementById('quotaStatus');
     const memoryStatus = document.getElementById('memoryStatus');
@@ -357,17 +402,26 @@ router.get('/ai-usage', (req, res) => {
       ].join('');
     }
 
+    function renderStorage(storage) {
+      dbFileValue.textContent = storage?.dbFile || '--';
+      dataDirValue.textContent = storage?.dataDir || '--';
+      storageStatusValue.textContent = storage?.statusText || '--';
+      storageStatusValue.style.color = storage?.persistent ? '#2c6d66' : '#8a6412';
+    }
+
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories] = await Promise.all([
+        const [usage, memberships, memories, storage] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships'),
           requestJson('/admin/api/member-memories'),
+          requestJson('/admin/api/storage-status'),
         ]);
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
         renderMemoryList(memories.items || []);
+        renderStorage(storage.storage || {});
         topStatus.textContent = '已刷新。';
       } catch (error) {
         topStatus.textContent = '刷新失败：' + error.message;
