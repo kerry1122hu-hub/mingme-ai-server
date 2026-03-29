@@ -4,11 +4,28 @@ const Database = require('better-sqlite3');
 
 const DAILY_LIMIT = 3;
 const IS_RENDER = Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL);
-const DATA_DIR = IS_RENDER
-  ? path.join('/tmp', 'mingme-ai-server-data')
-  : path.join(__dirname, '..', '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'mingme-ai.sqlite');
 const migrationMessages = [];
+
+function resolveDataDir() {
+  const customDataDir = `${process.env.MINGME_DATA_DIR || ''}`.trim();
+  if (customDataDir) {
+    return customDataDir;
+  }
+
+  const renderDiskMountPath = `${process.env.RENDER_DISK_MOUNT_PATH || ''}`.trim();
+  if (renderDiskMountPath) {
+    return path.join(renderDiskMountPath, 'mingme-ai-server-data');
+  }
+
+  if (IS_RENDER) {
+    return path.join('/tmp', 'mingme-ai-server-data');
+  }
+
+  return path.join(__dirname, '..', '..', 'data');
+}
+
+const DATA_DIR = resolveDataDir();
+const DB_FILE = path.join(DATA_DIR, 'mingme-ai.sqlite');
 
 function recordMigration(message) {
   migrationMessages.push(message);
@@ -449,6 +466,7 @@ function getMigrationMessages() {
 module.exports = {
   DAILY_LIMIT,
   DB_FILE,
+  DATA_DIR,
   buildUserKey,
   getMembershipStatus,
   getQuotaStatus,
