@@ -407,8 +407,108 @@ function getCurrentDayunAgeRange(chart) {
   return `${startAge ?? '--'}-${endAge ?? '--'}岁`;
 }
 
+function getNextDayunEntry(chart) {
+  const list = Array.isArray(chart?.daYun) ? chart.daYun : [];
+  if (!list.length) return null;
+  const currentEntry = getResolvedCurrentDaYunEntry(chart);
+  const currentLabel = formatDaYunEntry(currentEntry);
+  const currentIndex = list.findIndex((item) => formatDaYunEntry(item) === currentLabel);
+  if (currentIndex >= 0 && list[currentIndex + 1]) return list[currentIndex + 1];
+  if (currentIndex === -1 && list.length > 1) return list[1];
+  return null;
+}
+
+function getNextDayun(chart) {
+  return formatDaYunEntry(getNextDayunEntry(chart)) || '未明确';
+}
+
+function getNextDayunAgeRange(chart) {
+  const nextDaYun = getNextDayunEntry(chart);
+  const startAge = nextDaYun?.startAge ?? nextDaYun?.fromAge;
+  const endAge = nextDaYun?.endAge ?? nextDaYun?.toAge;
+  if (startAge == null && endAge == null) return '';
+  return `${startAge ?? '--'}-${endAge ?? '--'}岁`;
+}
+
 function isCorrectionMessage(text = '') {
   return /(不对|说错了|你错了|答非所问|重新说|重新断|重算|不是这个)/.test(textOf(text));
+}
+
+function stripCorrectionLead(text = '') {
+  return textOf(text).replace(/^(不对|说错了|你错了|答非所问|重新说|重新断|重算|不是这个|错了)[，,：:\s]*/g, '').trim();
+}
+
+function detectDeterministicIntent(text = '') {
+  const value = stripCorrectionLead(text);
+  if (!value) return '';
+  if (/(下个大运|下一步大运|下步大运|接下来走什么大运)/.test(value)) return 'next_dayun';
+  if (/(当前大运|现走什么大运|走什么大运|这步大运|当前这步运)/.test(value)) return 'current_dayun';
+  if (/(当前流年|今年流年|流年是什么|今年是什么年运|流年呢)/.test(value)) return 'liunian';
+  if (/(生肖|属相)/.test(value)) return 'zodiac';
+  if (/(纳音)/.test(value)) return 'nayin';
+  if (/(月令|当令|司令)/.test(value)) return 'month_command';
+  if (/(日柱|日支|日干)/.test(value)) return 'day_pillar';
+  if (/(月柱)/.test(value)) return 'month_pillar';
+  if (/(年柱)/.test(value)) return 'year_pillar';
+  if (/(时柱)/.test(value)) return 'hour_pillar';
+  if (/(日元|日主)/.test(value)) return 'day_master';
+  if (/(五行|五行分布|五行属性|五行缺什么)/.test(value)) return 'wuxing';
+  if (/(身强|身弱|强弱|日元状态)/.test(value)) return 'strength';
+  if (/(喜用神.*忌神|忌神.*喜用神|喜神.*忌神|忌神.*喜神|喜用神和忌神|用神和忌神|喜神和忌神)/.test(value)) return 'use_god_diff';
+  if (/(用神|喜神|忌神)/.test(value)) return 'use_god';
+  return '';
+}
+
+function resolveDeterministicIntent(userInput = '', history = []) {
+  const explicit = detectDeterministicIntent(userInput);
+  if (explicit) return { intent: explicit, isCorrection: isCorrectionMessage(userInput) };
+  if (!isCorrectionMessage(userInput)) return { intent: '', isCorrection: false };
+  const userMessages = (Array.isArray(history) ? history : [])
+    .filter((item) => item?.role === 'user')
+    .map((item) => textOf(item?.content))
+    .filter(Boolean);
+  const lastRelevant = [...userMessages].reverse().find((item) => !isCorrectionMessage(item));
+  return {
+    intent: detectDeterministicIntent(lastRelevant),
+    isCorrection: true,
+  };
+}
+
+function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false } = {}) {
+  const currentDayun = getCurrentDayun(chart);
+  const currentDayunAgeRange = getCurrentDayunAgeRange(chart);
+  const nextDayun = getNextDayun(chart);
+  const nextDayunAgeRange = getNextDayunAgeRange(chart);
+  const liunian = getLiunianPillar(chart) || getLiunianTheme(chart) || '未明确';
+  const useGod = getPrimaryUseGod(chart);
+  const pillars = chart?.pillars || {};
+  const formatPillar = (key) => `${textOf(pillars?.[key]?.gan)}${textOf(pillars?.[key]?.zhi)}` || '未明确';
+
+  const replies = {
+    current_dayun: isCorrection
+      ? `重校后看，你现在行的是${currentDayun}${currentDayunAgeRange ? `（约${currentDayunAgeRange}）` : ''}。这一层先以当前这步运为准。`
+      : `你当前行的是${currentDayun}${currentDayunAgeRange ? `（约${currentDayunAgeRange}）` : ''}。`,
+    next_dayun: isCorrection
+      ? `重校后看，你下一步大运是${nextDayun}${nextDayunAgeRange ? `（约${nextDayunAgeRange}）` : ''}。这一层先以后运为准。`
+      : `你下一步大运是${nextDayun}${nextDayunAgeRange ? `（约${nextDayunAgeRange}）` : ''}。`,
+    liunian: isCorrection
+      ? `重校后看，你今年的流年是${liunian}。`
+      : `你今年的流年是${liunian}。`,
+    zodiac: isCorrection ? `重校后看，你的生肖是${getShengXiao(chart)}。` : `你的生肖是${getShengXiao(chart)}。`,
+    nayin: isCorrection ? `重校后看，你的纳音是${getNaYin(chart)}。` : `你的纳音是${getNaYin(chart)}。`,
+    month_command: isCorrection ? `重校后看，你这张盘的月令在${formatPillar('month')}。` : `你的月令在${formatPillar('month')}。`,
+    day_pillar: isCorrection ? `重校后看，你的日柱是${formatPillar('day')}。` : `你的日柱是${formatPillar('day')}。`,
+    month_pillar: isCorrection ? `重校后看，你的月柱是${formatPillar('month')}。` : `你的月柱是${formatPillar('month')}。`,
+    year_pillar: isCorrection ? `重校后看，你的年柱是${formatPillar('year')}。` : `你的年柱是${formatPillar('year')}。`,
+    hour_pillar: isCorrection ? `重校后看，你的时柱是${formatPillar('hour')}。` : `你的时柱是${formatPillar('hour')}。`,
+    day_master: isCorrection ? `重校后看，你的日主是${getDayMasterLabel(chart)}。` : `你的日主是${getDayMasterLabel(chart)}。`,
+    wuxing: isCorrection ? `重校后看，你的五行分布是${getWxCountText(chart)}。` : `你的五行分布是${getWxCountText(chart)}。`,
+    strength: isCorrection ? `重校后看，你当前日元状态偏${getStrengthLevel(chart)}。` : `你当前日元状态偏${getStrengthLevel(chart)}。`,
+    use_god: isCorrection ? `重校后看，你当前主用神在${useGod}。` : `你当前主用神在${useGod}。`,
+    use_god_diff: `喜神偏向补你不足、调你失衡；忌神偏向加重偏颇和消耗。${useGod && useGod !== '未明确' ? `这张盘当前主用神在${useGod}。` : ''}`,
+  };
+
+  return replies[intent] || '';
 }
 
 function isDayunQuestion(text = '') {
@@ -1098,6 +1198,27 @@ async function summarizeChatHistory(history = []) {
 async function runChat({ userProfile, message, chart, history = [], userKey, profile, memberTier = 'free' }) {
   ensureOpenAIKey();
   const memberMemory = getMemberMemory({ userKey, chart, memberTier });
+  const deterministic = resolveDeterministicIntent(message, history);
+  if (deterministic.intent) {
+    const directReply = buildDeterministicReply(deterministic.intent, chart, { isCorrection: deterministic.isCorrection });
+    if (directReply) {
+      updateMemberMemory({
+        userKey,
+        chart,
+        memberTier,
+        userMessage: message,
+        assistantReply: directReply,
+        route: deriveMemoryWriteback({
+          reply: directReply,
+          topicType: 'core_chart',
+          intentType: deterministic.isCorrection ? 'continue' : 'clarify',
+          followUpAnchor: '',
+        }),
+        followUpAnchor: '',
+      });
+      return directReply;
+    }
+  }
   const companionPrompt = buildCompanionPrompt({
     chart,
     userInput: message,
