@@ -17,6 +17,12 @@ function resolveDataDir() {
     return path.join(renderDiskMountPath, 'mingme-ai-server-data');
   }
 
+  // Render persistent disks are commonly mounted at /data. Prefer it automatically
+  // when present so membership and memory survive deploys even without extra env vars.
+  if (IS_RENDER && fs.existsSync('/data')) {
+    return path.join('/data', 'mingme-ai-server-data');
+  }
+
   if (IS_RENDER) {
     return path.join('/tmp', 'mingme-ai-server-data');
   }
