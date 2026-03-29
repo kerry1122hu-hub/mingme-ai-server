@@ -124,7 +124,20 @@ const SYSTEM_PROMPT_COMPANION = `${MASTER_PERSONA_BASE}
 5. 不要像客服，不要像教科书，不要每轮都重新起一篇报告。
 6. 用户如果直接问运势、财运、感情、时机、开运、灵性诉求，就直接分析，不要先绕开问题。
 7. 若用户问风水、助运、刺符、泰国经文符、护身符、招财符等，要先判断其诉求更偏护身、招财、贵人、定心、提势，还是执行力，再结合本命与运势给搭配逻辑。
-8. 只有在关键信息真的缺失、而且追问会显著改变判断时，才可以补问一句；否则直接回答。`;
+8. 只有在关键信息真的缺失、而且追问会显著改变判断时，才可以补问一句；否则直接回答。
+
+【语言风格】
+- 典雅如古籍，亲切如师长。
+- 关键处可有动作描写，如“整衣冠而向北斗”“肃然正襟，虚空浮现”“抚掌而笑，空中显现”。
+- 中间转折可有动态感，如“骤然凝神，八字如铁索横江”“眼中精光骤亮”“忽然仰天大笑，如凤凰展翅”。
+- 善用比喻，如“如...”“似...”“恰如...”。
+- 结尾收势可轻带一笔，如“袖中飞出古卷”“虚空显现华山石壁拓文”“言毕，身影渐隐于云雾之中”。
+- 结尾尽量赠一句七言心法诗，署名“明己”。
+
+【严禁】
+- 不要写成汇报稿，不要出现“命盘信息显示”“根据以上分析”“总结来说”。
+- 不要每次都从第一轮旧话重新讲起，先抓这次真正要答的点。
+- 不要复述长背景，只把背景化成一句判断。`;
 
 const SYSTEM_PROMPT_READING = `${MASTER_PERSONA_BASE}
 
@@ -141,7 +154,14 @@ const SYSTEM_PROMPT_READING = `${MASTER_PERSONA_BASE}
 8. 若用户直接问八字本身，可优先按“定旺衰、明格局、寻用神、查刑冲、看岁运”的顺序组织。
 9. 若用户问风水、助运、刺符、经文符、护身与招财类诉求，要直接给出“更适合补什么、避什么、为何如此”的判断，不要只做空泛劝说。
 
-回答可以完整，但不要模板化，也不要宿命化。`;
+回答可以完整，但不要模板化，也不要宿命化。
+
+【语言风格】
+- 典雅如古籍，亲切如师长。
+- 可用“虚空浮现”“袖中飞出”等动态描写点题。
+- 善用比喻与意象，但不要堆砌空词。
+- 结尾尽量赠一句七言心法诗，署名“明己”。
+- 不要写成汇报稿，不要出现“根据以上分析”“总结来说”。`;
 
 const SYSTEM_PROMPT = SYSTEM_PROMPT_READING;
 
@@ -1052,17 +1072,32 @@ function buildHistoryMessages(history = []) {
     .filter(Boolean);
 }
 
+async function summarizeChatHistory(history = []) {
+  const items = buildHistoryMessages(history);
+  if (items.length < 3) return '';
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    temperature: 0.3,
+    max_completion_tokens: 120,
+    messages: [
+      {
+        role: 'system',
+        content: '你是上下文压缩助手。请把下面对话压成100字以内，只保留用户当前最在意的点、上一轮结论、未说完的点。只输出摘要，不要解释。',
+      },
+      {
+        role: 'user',
+        content: items.map((item) => `${item.role === 'user' ? '用户' : '明己'}：${item.content}`).join('\n'),
+      },
+    ],
+  });
+
+  return textOf(response.choices?.[0]?.message?.content);
+}
+
 async function runChat({ userProfile, message, chart, history = [], userKey, profile, memberTier = 'free' }) {
   ensureOpenAIKey();
   const memberMemory = getMemberMemory({ userKey, chart, memberTier });
-
-  const chatContext = buildChatContext({
-    chart,
-    userInput: message,
-    fallbackInput: userProfile,
-    userProfile,
-    history,
-  });
   const companionPrompt = buildCompanionPrompt({
     chart,
     userInput: message,
@@ -1072,19 +1107,46 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
     entrySource: 'chat_tab',
     persistedMemberMemory: memberMemory,
   });
+  const chatContext = buildChatContext({
+    chart,
+    userInput: message,
+    fallbackInput: userProfile,
+    userProfile,
+    history,
+  });
+  let compressedContext = '';
+  try {
+    compressedContext = await summarizeChatHistory(history);
+  } catch {
+    compressedContext = '';
+  }
 
   const response = await client.chat.completions.create({
-    model: DEFAULT_MODEL,
-    temperature: 0.92,
-    max_completion_tokens: companionPrompt.stateDecision?.responseLength?.max >= 150 ? 520 : 320,
+    model: 'gpt-4o',
+    temperature: 0.88,
+    max_completion_tokens: 500,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT_COMPANION },
       {
         role: 'system',
-        content: `${chatContext}\n\n这些背景只用于理解用户，不要照着复述，也不要重新写一篇完整报告。`,
+        content: `${SYSTEM_PROMPT_COMPANION}
+
+【口气修正】
+- 不要写成汇报稿，不要像“命盘信息显示”“根据以上分析”“总结来说”。
+- 开口像熟悉命盘的老师傅在喝茶聊天，可以有一点灵气和停顿感。
+- 不要复述长背景，只抓这一句真正要答的点。
+- 若上下文里已经说过，不要从第一轮重新讲起。
+- 关键处可以来一句短感叹，例如“这个地方，倒真有点意思。”
+- 若这一句适合收一笔，可自然赠一句短心法或七言句，不必每次都写。`,
       },
-      { role: 'user', content: companionPrompt.prompt },
-      ...buildHistoryMessages(history),
+      {
+        role: 'system',
+        content: [
+          chatContext,
+          compressedContext ? `【近期对话摘要】\n${compressedContext}` : '',
+          buildMemberMemoryContext(memberMemory),
+          '这些背景只用于理解用户，不要照着复述，也不要重新写一篇完整报告。',
+        ].filter(Boolean).join('\n\n'),
+      },
       { role: 'user', content: textOf(message) },
     ],
   });
