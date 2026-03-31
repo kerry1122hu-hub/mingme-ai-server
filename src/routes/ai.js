@@ -3,6 +3,8 @@ const multer = require('multer');
 const { runChat, runReading, runTranscription } = require('../services/openaiService');
 const { getQuotaStatus, consumeQuota, getMembershipStatus } = require('../services/quotaService');
 const { trackAnalyticsEvent } = require('../services/analyticsService');
+const { savePaywallLead } = require('../services/paywallLeadService');
+const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -146,6 +148,74 @@ router.post('/track-event', async (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'track event failed', 'TRACK_EVENT_FAILED'));
+  }
+});
+
+router.post('/paywall-lead', async (req, res) => {
+  try {
+    const {
+      registration,
+      selectedPlan,
+      profile,
+      userKey,
+      chart,
+      source,
+    } = req.body || {};
+
+    const lead = savePaywallLead({
+      registration,
+      selectedPlan,
+      profile,
+      userKey,
+      chart,
+      source,
+    });
+
+    res.locals.outputLength = JSON.stringify(lead).length;
+    return res.json(ok({ lead }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'save lead failed', 'SAVE_LEAD_FAILED'));
+  }
+});
+
+router.post('/manual-payment-review', async (req, res) => {
+  try {
+    const {
+      registration,
+      selectedPlan,
+      paymentMethod,
+      amountText,
+      paidAtText,
+      screenshotName,
+      screenshotDataUrl,
+      notes,
+      profile,
+      userKey,
+      chart,
+      source,
+    } = req.body || {};
+
+    const review = saveManualPaymentReview({
+      registration,
+      selectedPlan,
+      paymentMethod,
+      amountText,
+      paidAtText,
+      screenshotName,
+      screenshotDataUrl,
+      notes,
+      profile,
+      userKey,
+      chart,
+      source,
+    });
+
+    res.locals.outputLength = JSON.stringify(review).length;
+    return res.json(ok({ review }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'save manual payment failed', 'SAVE_MANUAL_PAYMENT_FAILED'));
   }
 });
 

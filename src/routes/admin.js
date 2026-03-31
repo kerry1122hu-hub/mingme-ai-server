@@ -14,6 +14,7 @@ const {
 } = require('../services/memory_service');
 const { listAnalyticsEvents } = require('../services/analyticsService');
 const { listPaywallLeads } = require('../services/paywallLeadService');
+const { listManualPaymentReviews, approveManualPaymentReview } = require('../services/manualPaymentService');
 const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
 const { requireAdminToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
@@ -130,6 +131,35 @@ router.post('/api/payment-simulate-paid', (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'simulate paid failed', 'SIMULATE_PAID_FAILED'));
+  }
+});
+
+router.get('/api/manual-payment-reviews', (req, res) => {
+  try {
+    const items = listManualPaymentReviews({
+      limit: req.query?.limit || 100,
+      status: req.query?.status || '',
+    });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/api/manual-payment-approve', (req, res) => {
+  try {
+    const { id, reviewedNotes } = req.body || {};
+    if (!id) {
+      return res.status(400).json(fail('id is required', 'BAD_REQUEST'));
+    }
+    const result = approveManualPaymentReview({ id, reviewedNotes });
+    res.locals.outputLength = JSON.stringify(result).length;
+    return res.json(ok(result));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'approve manual payment failed', 'APPROVE_MANUAL_PAYMENT_FAILED'));
   }
 });
 
@@ -381,6 +411,21 @@ router.get('/ai-usage', (req, res) => {
           </thead>
           <tbody id="leadBody"></tbody>
         </table>
+
+        <h2 style="margin-top:20px;">待确认付款名单</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>提交时间</th>
+              <th>用户</th>
+              <th>方案 / 支付方式</th>
+              <th>付款信息</th>
+              <th>凭证</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="manualPaymentBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -390,6 +435,7 @@ router.get('/ai-usage', (req, res) => {
     const membershipBody = document.getElementById('membershipBody');
     const memoryBody = document.getElementById('memoryBody');
     const leadBody = document.getElementById('leadBody');
+    const manualPaymentBody = document.getElementById('manualPaymentBody');
     const leadRecentValue = document.getElementById('leadRecentValue');
     const leadAnnualValue = document.getElementById('leadAnnualValue');
     const leadMonthlyValue = document.getElementById('leadMonthlyValue');
@@ -571,6 +617,28 @@ router.get('/ai-usage', (req, res) => {
         : '<tr><td colspan="5" class="muted">当前筛选条件下还没有新的付费意向。</td></tr>';
     }
 
+    function renderManualPaymentReviews(items) {
+      manualPaymentBody.innerHTML = items.length
+        ? items.map((item) => {
+          const preview = item.screenshotDataUrl
+            ? '<img src="' + item.screenshotDataUrl + '" alt="付款凭证" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" />'
+            : '<span class="muted">未上传截图</span>';
+          const approveButton = item.status === 'approved'
+            ? '<span class="pill premium">已开通</span>'
+            : '<button data-approve-review="' + item.id + '" style="background:linear-gradient(135deg,#6ecfc0,#4aa7a1);color:#fff;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">一键开通会员</button>';
+
+          return '<tr>' +
+            '<td class="muted">' + (item.createdAt || '--') + '</td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div><div class="muted">' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
+            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '微信收款码' : '支付宝收款码') + '</div><div class="muted">' + (item.status === 'approved' ? '已开通' : '待确认') + '</div></td>' +
+            '<td><div>金额：' + (item.amountText || '未填') + '</div><div class="muted">付款时间：' + (item.paidAtText || '未填') + '</div><div class="muted">' + (item.notes || '无备注') + '</div></td>' +
+            '<td>' + preview + '</td>' +
+            '<td>' + approveButton + '</td>' +
+            '</tr>';
+        }).join('')
+        : '<tr><td colspan="6" class="muted">还没有待确认付款记录。</td></tr>';
+    }
+
     function renderStorage(storage) {
       dbFileValue.textContent = storage?.dbFile || '--';
       dataDirValue.textContent = storage?.dataDir || '--';
@@ -578,21 +646,37 @@ router.get('/ai-usage', (req, res) => {
       storageStatusValue.style.color = storage?.persistent ? '#2c6d66' : '#8a6412';
     }
 
+    async function approveManualPayment(id) {
+      topStatus.textContent = '正在开通会员...';
+      try {
+        await requestJson('/admin/api/manual-payment-approve', {
+          method: 'POST',
+          body: JSON.stringify({ id }),
+        });
+        topStatus.textContent = '已开通会员。';
+        await loadOverview();
+      } catch (error) {
+        topStatus.textContent = '开通失败：' + error.message;
+      }
+    }
+
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, storage, leads] = await Promise.all([
+        const [usage, memberships, memories, storage, leads, manualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships'),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
+          requestJson('/admin/api/manual-payment-reviews?status=pending'),
         ]);
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
         renderMemoryList(memories.items || []);
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
+        renderManualPaymentReviews(manualPayments.items || []);
         topStatus.textContent = '已刷新。';
       } catch (error) {
         topStatus.textContent = '刷新失败：' + error.message;
@@ -672,6 +756,12 @@ router.get('/ai-usage', (req, res) => {
     document.getElementById('loadMemoryBtn').addEventListener('click', loadMemberMemory);
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
+    document.addEventListener('click', (event) => {
+      const reviewId = event.target?.getAttribute?.('data-approve-review');
+      if (reviewId) {
+        approveManualPayment(reviewId);
+      }
+    });
     loadOverview();
   </script>
 </body>
