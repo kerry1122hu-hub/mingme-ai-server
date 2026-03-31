@@ -8,6 +8,12 @@ const { DB_FILE, getMigrationMessages } = require('./src/services/quotaService')
 
 const app = express();
 
+function captureRawBody(req, res, buffer) {
+  if (buffer?.length) {
+    req.rawBody = buffer.toString('utf8');
+  }
+}
+
 process.on('uncaughtException', (error) => {
   console.error('[startup] Uncaught Exception:', error);
 });
@@ -56,8 +62,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: false, limit: '2mb' }));
+app.use(express.json({ limit: '2mb', verify: captureRawBody }));
+app.use(express.urlencoded({ extended: false, limit: '2mb', verify: captureRawBody }));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, message: 'MingMe AI server root is healthy' });
