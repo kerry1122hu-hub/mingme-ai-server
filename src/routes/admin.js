@@ -386,8 +386,8 @@ router.get('/ai-usage', (req, res) => {
               <th>用户</th>
               <th>关联信息</th>
               <th>长期关注</th>
-              <th>上次未完结点</th>
-              <th>回答偏好</th>
+              <th>最近问题</th>
+              <th>问题数 / 回答偏好</th>
             </tr>
           </thead>
           <tbody id="memoryBody"></tbody>
@@ -736,7 +736,7 @@ router.get('/ai-usage', (req, res) => {
         ? filteredItems.map((item) => {
           const related = getMemoryRelatedProfile(item);
           const focus = joinText(item.profileMemory?.longTermFocus, '未形成');
-          const openLoop = item.sessionMemory?.lastOpenLoop || '暂无';
+          const lastQuestion = item.lastUserMessage || item.sessionMemory?.lastOpenLoop || '暂无';
           const prefs = [
             item.responsePreference?.likesStrongConclusion ? '喜欢直接结论' : '',
             item.responsePreference?.likesMysticLanguage ? '偏术语' : '',
@@ -747,8 +747,8 @@ router.get('/ai-usage', (req, res) => {
             '<td><div class="mono">' + item.userKey + '</div></td>' +
             '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="muted">' + (related.email || '未留邮箱') + '</div><div class="muted">' + (related.phone || '未留手机号') + '</div><div class="muted">' + (related.city || '未留城市') + '</div></td>' +
             '<td>' + focus + '</td>' +
-            '<td>' + openLoop + '</td>' +
-            '<td>' + prefs + '</td>' +
+            '<td>' + lastQuestion + '</td>' +
+            '<td><div>' + (item.questionCount || 0) + ' 条</div><div class="muted">' + prefs + '</div></td>' +
             '</tr>';
         }).join('')
         : '<tr><td colspan="5" class="muted">还没有符合条件的会员记忆记录。</td></tr>';
@@ -766,6 +766,16 @@ router.get('/ai-usage', (req, res) => {
         memory.responsePreference?.likesFollowupQuestion ? '接受追问' : '',
         memory.responsePreference?.avoidVerboseTemplate ? '不喜欢模板长答' : '',
       ].filter(Boolean).join('、') || '未形成';
+      const questionHistory = Array.isArray(memory.questionHistory) ? memory.questionHistory : [];
+      const historyHtml = questionHistory.length
+        ? questionHistory.map((item) => (
+          '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">' +
+            '<div class="muted" style="margin-bottom:4px;">' + (item.createdAt || '--') + ' / ' + (item.topicType || 'general') + '</div>' +
+            '<div><strong>用户问题：</strong>' + (item.userMessage || '暂无') + '</div>' +
+            (item.assistantReply ? '<div class="muted" style="margin-top:4px;"><strong>当时回复：</strong>' + item.assistantReply + '</div>' : '') +
+          '</div>'
+        )).join('')
+        : '<div class="memory-line muted">暂时还没有累计的问题历史。</div>';
 
       memoryDetail.innerHTML = [
         '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
@@ -777,6 +787,8 @@ router.get('/ai-usage', (req, res) => {
         '<div class="memory-line"><strong>上次比较题：</strong>' + compared + '</div>',
         '<div class="memory-line"><strong>最近情绪走势：</strong>' + (memory.sessionMemory?.recentMoodTrend || 'unknown') + '</div>',
         '<div class="memory-line"><strong>回答偏好：</strong>' + prefs + '</div>',
+        '<div class="memory-line" style="margin-top:14px;"><strong>累计问题历史：</strong></div>',
+        historyHtml,
       ].join('');
     }
 

@@ -50,6 +50,19 @@ function ensureMemoryDatabase() {
       avoid_verbose_template INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS member_question_memory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_key TEXT NOT NULL,
+      user_message TEXT NOT NULL DEFAULT '',
+      assistant_reply TEXT NOT NULL DEFAULT '',
+      topic_type TEXT NOT NULL DEFAULT '',
+      intent_type TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_member_question_memory_user_time
+      ON member_question_memory(user_key, created_at DESC);
   `);
 
   return db;
@@ -181,6 +194,30 @@ function normalizePreferenceRow(row) {
   };
 }
 
+function normalizeQuestionRow(row) {
+  return {
+    id: Number(row?.id || 0),
+    userMessage: row?.user_message || '',
+    assistantReply: row?.assistant_reply || '',
+    topicType: row?.topic_type || '',
+    intentType: row?.intent_type || '',
+    createdAt: row?.created_at || '',
+  };
+}
+
+function listQuestionHistory(userKey, limit = 20) {
+  const normalizedLimit = Math.max(1, Math.min(Number(limit || 20), 100));
+  const rows = db.prepare(`
+    SELECT id, user_message, assistant_reply, topic_type, intent_type, created_at
+    FROM member_question_memory
+    WHERE user_key = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(userKey, normalizedLimit);
+
+  return rows.map(normalizeQuestionRow);
+}
+
 function getMemberMemory({ userKey, chart, memberTier }) {
   const resolvedKey = buildUserKey({ userKey, chart });
   const enabled = isPremiumTier(memberTier);
@@ -205,6 +242,7 @@ function getMemberMemory({ userKey, chart, memberTier }) {
     profileMemory: normalizeProfileRow(profileRow),
     sessionMemory: normalizeSessionRow(sessionRow),
     responsePreference: normalizePreferenceRow(preferenceRow),
+    questionHistory: listQuestionHistory(resolvedKey, 30),
   };
 }
 
@@ -323,6 +361,35 @@ function updateMemberMemory({
     nextPreferences.avoidVerboseTemplate ? 1 : 0
   );
 
+  const normalizedUserMessage = textOf(userMessage).slice(0, 1000);
+  const normalizedAssistantReply = textOf(assistantReply).slice(0, 1200);
+  if (normalizedUserMessage) {
+    db.prepare(`
+      INSERT INTO member_question_memory (
+        user_key, user_message, assistant_reply, topic_type, intent_type, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(
+      resolvedKey,
+      normalizedUserMessage,
+      normalizedAssistantReply,
+      textOf(route.topicType).slice(0, 40),
+      textOf(route.intentType).slice(0, 40)
+    );
+
+    db.prepare(`
+      DELETE FROM member_question_memory
+      WHERE user_key = ?
+        AND id NOT IN (
+          SELECT id
+          FROM member_question_memory
+          WHERE user_key = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT 80
+        )
+    `).run(resolvedKey, resolvedKey);
+  }
+
   return getMemberMemory({ userKey: resolvedKey, chart, memberTier });
 }
 
@@ -381,7 +448,19 @@ function listMemberMemories({ limit = 100 } = {}) {
       pref.likes_modern_explanation AS likes_modern_explanation,
       pref.likes_comparison_answer AS likes_comparison_answer,
       pref.likes_followup_question AS likes_followup_question,
-      pref.avoid_verbose_template AS avoid_verbose_template
+      pref.avoid_verbose_template AS avoid_verbose_template,
+      (
+        SELECT COUNT(*)
+        FROM member_question_memory AS history_count
+        WHERE history_count.user_key = session.user_key
+      ) AS question_count,
+      (
+        SELECT history_last.user_message
+        FROM member_question_memory AS history_last
+        WHERE history_last.user_key = session.user_key
+        ORDER BY history_last.created_at DESC, history_last.id DESC
+        LIMIT 1
+      ) AS last_user_message
     FROM member_session_memory AS session
     LEFT JOIN member_profile_memory AS profile
       ON profile.user_key = session.user_key
@@ -396,6 +475,8 @@ function listMemberMemories({ limit = 100 } = {}) {
     sessionMemory: normalizeSessionRow(row),
     profileMemory: normalizeProfileRow(row),
     responsePreference: normalizePreferenceRow(row),
+    questionCount: Number(row.question_count || 0),
+    lastUserMessage: row.last_user_message || '',
   }));
 }
 
