@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const aiRoutes = require('./src/routes/ai');
+const payRoutes = require('./src/routes/pay');
 const adminRoutes = require('./src/routes/admin');
 const { DB_FILE, getMigrationMessages } = require('./src/services/quotaService');
 
@@ -22,10 +23,18 @@ function formatApiLabel(url = '') {
   if (url.includes('/api/ai/chat')) return 'AI 聊天';
   if (url.includes('/api/ai/ai-reading')) return 'AI 阅读生成';
   if (url.includes('/api/ai/transcribe')) return '语音转写';
+  if (url.includes('/api/ai/track-event')) return '埋点上报';
+  if (url.includes('/api/ai/paywall-lead')) return '付费意向提交';
+  if (url.includes('/api/pay/create-order')) return '支付创建订单';
+  if (url.includes('/api/pay/order/')) return '支付查单';
+  if (url.includes('/api/pay/simulate-paid')) return '支付模拟成功';
+  if (url.includes('/api/pay/notify/wechat')) return '微信支付回调';
+  if (url.includes('/api/pay/notify/alipay')) return '支付宝回调';
   if (url.includes('/admin/api/usage-overview')) return '后台用量概览';
   if (url.includes('/admin/api/memberships')) return '后台会员列表';
   if (url.includes('/admin/api/set-membership')) return '后台会员设置';
   if (url.includes('/admin/api/set-extra-quota')) return '后台额外额度设置';
+  if (url.includes('/admin/api/paywall-leads')) return '后台付费意向';
   if (url.includes('/admin/ai-usage')) return '后台页面';
   return '未知接口';
 }
@@ -46,7 +55,9 @@ app.use((req, res, next) => {
   });
   next();
 });
+
 app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, message: 'MingMe AI server root is healthy' });
@@ -61,6 +72,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/ai', aiRoutes);
+app.use('/api/pay', payRoutes);
 app.use('/admin', adminRoutes);
 
 const port = Number(process.env.PORT || 3001);

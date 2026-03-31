@@ -14,6 +14,7 @@ const {
 } = require('../services/memory_service');
 const { listAnalyticsEvents } = require('../services/analyticsService');
 const { listPaywallLeads } = require('../services/paywallLeadService');
+const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
 const { requireAdminToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -96,6 +97,39 @@ router.get('/api/paywall-leads', (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/payment-orders', (req, res) => {
+  try {
+    const items = listPaymentOrders({ limit: req.query?.limit || 100 });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/api/payment-simulate-paid', (req, res) => {
+  try {
+    const { orderId, provider = 'manual', providerTradeNo = '', tradeType = 'MANUAL' } = req.body || {};
+    if (!orderId) {
+      return res.status(400).json(fail('orderId is required', 'BAD_REQUEST'));
+    }
+    const result = markOrderPaid({
+      orderId,
+      provider,
+      providerTradeNo,
+      tradeType,
+      verified: true,
+      rawPayload: { source: 'admin_simulate_paid' },
+    });
+    res.locals.outputLength = JSON.stringify(result).length;
+    return res.json(ok(result));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'simulate paid failed', 'SIMULATE_PAID_FAILED'));
   }
 });
 
