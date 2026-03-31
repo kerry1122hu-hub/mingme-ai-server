@@ -13,6 +13,7 @@ const {
   listMemberMemories,
 } = require('../services/memory_service');
 const { listAnalyticsEvents } = require('../services/analyticsService');
+const { listPaywallLeads } = require('../services/paywallLeadService');
 const { requireAdminToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -79,6 +80,17 @@ router.get('/api/storage-status', (req, res) => {
 router.get('/api/analytics-events', (req, res) => {
   try {
     const items = listAnalyticsEvents({ limit: req.query?.limit || 100 });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/paywall-leads', (req, res) => {
+  try {
+    const items = listPaywallLeads({ limit: req.query?.limit || 100 });
     res.locals.outputLength = JSON.stringify(items).length;
     return res.json(ok({ items }));
   } catch (error) {
@@ -294,6 +306,47 @@ router.get('/ai-usage', (req, res) => {
           </thead>
           <tbody id="memoryBody"></tbody>
         </table>
+
+        <h2 style="margin-top:20px;">付费意向看板</h2>
+        <div class="storage-grid" style="margin-top:12px; margin-bottom:12px;">
+          <div class="storage-card">
+            <div class="storage-label">近 7 天提交</div>
+            <div class="storage-value" id="leadRecentValue">--</div>
+          </div>
+          <div class="storage-card">
+            <div class="storage-label">年度方案</div>
+            <div class="storage-value" id="leadAnnualValue">--</div>
+          </div>
+          <div class="storage-card">
+            <div class="storage-label">月度方案</div>
+            <div class="storage-value" id="leadMonthlyValue">--</div>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <select id="leadPlanFilter">
+            <option value="all">全部方案</option>
+            <option value="annual">只看年度</option>
+            <option value="monthly">只看月度</option>
+          </select>
+          <select id="leadContactFilter">
+            <option value="all">全部线索</option>
+            <option value="email">只看有邮箱</option>
+            <option value="phone">只看有手机号</option>
+            <option value="both">邮箱和手机号都有</option>
+          </select>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>提交时间</th>
+              <th>用户信息</th>
+              <th>方案</th>
+              <th>联系方式</th>
+              <th>关注问题</th>
+            </tr>
+          </thead>
+          <tbody id="leadBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -302,6 +355,12 @@ router.get('/ai-usage', (req, res) => {
     const usageBody = document.getElementById('usageBody');
     const membershipBody = document.getElementById('membershipBody');
     const memoryBody = document.getElementById('memoryBody');
+    const leadBody = document.getElementById('leadBody');
+    const leadRecentValue = document.getElementById('leadRecentValue');
+    const leadAnnualValue = document.getElementById('leadAnnualValue');
+    const leadMonthlyValue = document.getElementById('leadMonthlyValue');
+    const leadPlanFilter = document.getElementById('leadPlanFilter');
+    const leadContactFilter = document.getElementById('leadContactFilter');
     const dateInput = document.getElementById('dateKey');
     const topStatus = document.getElementById('topStatus');
     const dbFileValue = document.getElementById('dbFileValue');
@@ -311,6 +370,7 @@ router.get('/ai-usage', (req, res) => {
     const quotaStatus = document.getElementById('quotaStatus');
     const memoryStatus = document.getElementById('memoryStatus');
     const memoryDetail = document.getElementById('memoryDetail');
+    let latestLeadItems = [];
 
     dateInput.value = new Date().toISOString().slice(0, 10);
     document.getElementById('quotaDateKey').value = new Date().toISOString().slice(0, 10);
@@ -414,6 +474,69 @@ router.get('/ai-usage', (req, res) => {
       ].join('');
     }
 
+    function isRecentLead(item) {
+      const time = item?.createdAt ? new Date(item.createdAt).getTime() : NaN;
+      if (!Number.isFinite(time)) return false;
+      return Date.now() - time <= 7 * 24 * 60 * 60 * 1000;
+    }
+
+    function getFilteredLeads(items) {
+      const planFilter = leadPlanFilter?.value || 'all';
+      const contactFilter = leadContactFilter?.value || 'all';
+
+      return items.filter((item) => {
+        if (planFilter !== 'all' && item.selectedPlan !== planFilter) {
+          return false;
+        }
+
+        const hasEmail = Boolean(String(item.email || '').trim());
+        const hasPhone = Boolean(String(item.phone || '').trim());
+
+        if (contactFilter === 'email' && !hasEmail) return false;
+        if (contactFilter === 'phone' && !hasPhone) return false;
+        if (contactFilter === 'both' && !(hasEmail && hasPhone)) return false;
+        return true;
+      });
+    }
+
+    function renderLeadStats(items) {
+      const annualCount = items.filter((item) => item.selectedPlan === 'annual').length;
+      const monthlyCount = items.filter((item) => item.selectedPlan === 'monthly').length;
+      const recentCount = items.filter(isRecentLead).length;
+
+      leadAnnualValue.textContent = annualCount + ' 条';
+      leadMonthlyValue.textContent = monthlyCount + ' 条';
+      leadRecentValue.textContent = recentCount + ' 条';
+    }
+
+    function renderPaywallLeads(items) {
+      latestLeadItems = Array.isArray(items) ? items : [];
+      renderLeadStats(latestLeadItems);
+      const filteredItems = getFilteredLeads(latestLeadItems);
+
+      leadBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const hasEmail = Boolean(String(item.email || '').trim());
+          const hasPhone = Boolean(String(item.phone || '').trim());
+          const contactText = hasEmail && hasPhone
+            ? '邮箱 + 手机'
+            : hasEmail
+              ? '仅邮箱'
+              : hasPhone
+                ? '仅手机'
+                : '未留联系方式';
+
+          return '<tr>' +
+            '<td class="muted">' + (item.createdAt || '--') + '</td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div></td>' +
+            '<td><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong><div class="muted">' + (item.source || '--') + '</div></td>' +
+            '<td><div>' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div><div class="muted">' + contactText + '</div></td>' +
+            '<td>' + (item.focus || '未填写') + '</td>' +
+            '</tr>';
+        }).join('')
+        : '<tr><td colspan="5" class="muted">当前筛选条件下还没有新的付费意向。</td></tr>';
+    }
+
     function renderStorage(storage) {
       dbFileValue.textContent = storage?.dbFile || '--';
       dataDirValue.textContent = storage?.dataDir || '--';
@@ -424,16 +547,18 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, storage] = await Promise.all([
+        const [usage, memberships, memories, storage, leads] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships'),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/storage-status'),
+          requestJson('/admin/api/paywall-leads'),
         ]);
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
         renderMemoryList(memories.items || []);
         renderStorage(storage.storage || {});
+        renderPaywallLeads(leads.items || []);
         topStatus.textContent = '已刷新。';
       } catch (error) {
         topStatus.textContent = '刷新失败：' + error.message;
@@ -511,6 +636,8 @@ router.get('/ai-usage', (req, res) => {
     document.getElementById('saveBtn').addEventListener('click', saveMembership);
     document.getElementById('saveQuotaBtn').addEventListener('click', saveExtraQuota);
     document.getElementById('loadMemoryBtn').addEventListener('click', loadMemberMemory);
+    leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
+    leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     loadOverview();
   </script>
 </body>
