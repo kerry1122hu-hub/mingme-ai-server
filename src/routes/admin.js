@@ -68,7 +68,7 @@ router.get('/api/storage-status', (req, res) => {
       dataDir,
       persistent,
       fallbackTmp,
-      statusText: persistent ? '宸蹭娇鐢ㄦ寔涔呭寲纾佺洏' : (fallbackTmp ? '褰撳墠浠嶅湪涓存椂鐩綍 /tmp' : '褰撳墠涓鸿嚜瀹氫箟鐩綍'),
+      statusText: persistent ? '已使用持久化磁盘' : (fallbackTmp ? '当前仍在临时目录 /tmp' : '当前为自定义目录'),
     };
 
     res.locals.outputLength = JSON.stringify(storage).length;
@@ -228,7 +228,7 @@ router.get('/ai-usage', (req, res) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MingMe AI 鐢ㄩ噺鍚庡彴</title>
+  <title>MingMe AI 管理后台</title>
   <style>
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #edf5f3; color: #18322e; }
     .wrap { max-width: 1180px; margin: 0 auto; padding: 24px; }
@@ -252,8 +252,8 @@ router.get('/ai-usage', (req, res) => {
     .admin-section { background: rgba(255,255,255,.9); border-radius: 22px; border: 1px solid rgba(117, 170, 160, 0.18); box-shadow: 0 10px 28px rgba(24, 50, 46, 0.08); overflow: hidden; }
     .admin-section summary { list-style: none; cursor: pointer; padding: 18px 20px; font-size: 18px; font-weight: 800; color: #18322e; display: flex; align-items: center; justify-content: space-between; }
     .admin-section summary::-webkit-details-marker { display: none; }
-    .admin-section summary::after { content: '灞曞紑'; font-size: 12px; font-weight: 700; color: #4aa7a1; background: rgba(234,243,240,.95); border-radius: 999px; padding: 5px 10px; }
-    .admin-section[open] summary::after { content: '鏀惰捣'; }
+    .admin-section summary::after { content: '展开'; font-size: 12px; font-weight: 700; color: #4aa7a1; background: rgba(234,243,240,.95); border-radius: 999px; padding: 5px 10px; }
+    .admin-section[open] summary::after { content: '收起'; }
     .section-content { padding: 0 20px 20px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { padding: 10px 8px; border-bottom: 1px solid rgba(129, 166, 159, 0.20); text-align: left; vertical-align: top; }
@@ -280,24 +280,24 @@ router.get('/ai-usage', (req, res) => {
 <body>
   <div class="wrap">
     <div class="hero">
-      <h1>MingMe AI 鐢ㄩ噺鍚庡彴</h1>
-      <div class="sub">杩欓噷鍙互鏌ョ湅浠婂ぉ璋佸湪鐢?AI銆佽繕鍓╁灏戞銆佹槸涓嶆槸浼氬憳锛屼篃鍙互鎵嬪姩琛ヤ細鍛樸€佽ˉ娆℃暟锛屽苟鏌ョ湅浼氬憳璁板繂鏄惁宸茬粡寮€濮嬬敓鏁堛€?/div>
+      <h1>MingMe AI 管理后台</h1>
+      <div class="sub">这里可以查看今日 AI 使用情况、会员状态、额外次数、会员记忆，以及人工付款审核与已开通记录。</div>
       <div class="toolbar">
         <input id="dateKey" type="date" />
-        <button id="reloadBtn">鍒锋柊浠婃棩鏁版嵁</button>
+        <button id="reloadBtn">刷新今日数据</button>
       </div>
       <div class="storage-grid">
         <div class="storage-card">
-          <div class="storage-label">SQLite 璺緞</div>
-          <div class="storage-value mono" id="dbFileValue">鍔犺浇涓?..</div>
+          <div class="storage-label">SQLite 路径</div>
+          <div class="storage-value mono" id="dbFileValue">加载中...</div>
         </div>
         <div class="storage-card">
-          <div class="storage-label">鏁版嵁鐩綍</div>
-          <div class="storage-value mono" id="dataDirValue">鍔犺浇涓?..</div>
+          <div class="storage-label">数据目录</div>
+          <div class="storage-value mono" id="dataDirValue">加载中...</div>
         </div>
         <div class="storage-card">
-          <div class="storage-label">鎸佷箙鍖栫姸鎬?/div>
-          <div class="storage-value" id="storageStatusValue">鍔犺浇涓?..</div>
+          <div class="storage-label">持久化状态</div>
+          <div class="storage-value" id="storageStatusValue">加载中...</div>
         </div>
       </div>
       <div class="status" id="topStatus"></div>
@@ -305,15 +305,15 @@ router.get('/ai-usage', (req, res) => {
 
     <div class="grid">
       <div class="card">
-        <h2>浠婃棩 AI 鐢ㄩ噺</h2>
+        <h2>今日 AI 用量</h2>
         <table>
           <thead>
             <tr>
-              <th>鐢ㄦ埛璧勬枡</th>
-              <th>浠婃棩宸茬敤</th>
-              <th>鍓╀綑 / 鎬婚</th>
-              <th>浼氬憳鐘舵€?/th>
-              <th>鏈€鍚庝娇鐢?/th>
+              <th>用户资料</th>
+              <th>今日已用</th>
+              <th>剩余 / 总额</th>
+              <th>会员状态</th>
+              <th>最后使用</th>
             </tr>
           </thead>
           <tbody id="usageBody"></tbody>
@@ -321,147 +321,147 @@ router.get('/ai-usage', (req, res) => {
       </div>
 
       <div class="card">
-        <h2>浼氬憳鐘舵€佽缃?/h2>
+        <h2>会员状态设置</h2>
         <div class="form">
-          <input id="userKey" placeholder="杈撳叆 userKey锛屼緥濡?chart:1990-06-15-10-30-female" />
+          <input id="userKey" placeholder="输入 userKey，例如 chart:1990-06-15-10-30-female" />
           <div class="row3">
             <select id="tier">
-              <option value="free">鍏嶈垂</option>
-              <option value="premium">浼氬憳</option>
+              <option value="free">免费</option>
+              <option value="premium">会员</option>
             </select>
             <select id="status">
-              <option value="active">鐢熸晥涓?/option>
-              <option value="inactive">鏈敓鏁?/option>
+              <option value="active">生效中</option>
+              <option value="inactive">未生效</option>
             </select>
             <input id="expiresAt" type="datetime-local" />
           </div>
-          <textarea id="notes" placeholder="澶囨敞锛屼緥濡傦細iOS 瀹℃牳娴嬭瘯浼氬憳 / 鎵嬪姩璧犻€?30 澶?></textarea>
-          <button id="saveBtn">淇濆瓨浼氬憳鐘舵€?/button>
+          <textarea id="notes" placeholder="备注，例如：审核测试会员 / 手动赠送 30 天"></textarea>
+          <button id="saveBtn">保存会员状态</button>
           <div class="status" id="saveStatus"></div>
         </div>
 
-        <h2 style="margin-top:20px;">澧炲姞浠婃棩 AI 娆℃暟</h2>
+        <h2 style="margin-top:20px;">增加今日 AI 次数</h2>
         <div class="form">
-          <input id="quotaUserKey" placeholder="杈撳叆 userKey锛岀粰鏌愪釜鐢ㄦ埛澧炲姞浠婂ぉ鐨?AI 娆℃暟" />
+          <input id="quotaUserKey" placeholder="输入 userKey，给某位用户增加今天的 AI 次数" />
           <div class="row">
             <input id="quotaDateKey" type="date" />
-            <input id="extraCount" type="number" min="0" step="1" placeholder="棰濆澧炲姞娆℃暟锛屼緥濡?5" />
+            <input id="extraCount" type="number" min="0" step="1" placeholder="额外增加次数，例如 5" />
           </div>
-          <textarea id="quotaNotes" placeholder="澶囨敞锛屼緥濡傦細浜哄伐琛ュ伩 5 娆?/ 娴嬭瘯璧犻€?></textarea>
-          <button id="saveQuotaBtn">淇濆瓨棰濆娆℃暟</button>
+          <textarea id="quotaNotes" placeholder="备注，例如：人工补偿 5 次 / 活动赠送"></textarea>
+          <button id="saveQuotaBtn">保存额外次数</button>
           <div class="status" id="quotaStatus"></div>
         </div>
 
-        <h2 style="margin-top:20px;">浼氬憳鍒楄〃</h2>
+        <h2 style="margin-top:20px;">会员列表</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
-          <input id="membershipSearch" placeholder="鎼滅储 userKey / 鏄电О / 閭 / 鎵嬫満鍙?/ 鍩庡競" />
+          <input id="membershipSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号 / 城市" />
         </div>
         <table>
           <thead>
             <tr>
-              <th>鐢ㄦ埛</th>
-              <th>妗ｄ綅</th>
-              <th>鐘舵€?/th>
-              <th>鎿嶄綔</th>
+              <th>用户</th>
+              <th>档位</th>
+              <th>状态</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="membershipBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">浼氬憳璁板繂鏌ョ湅鍖?/h2>
+        <h2 style="margin-top:20px;">会员记忆查看区</h2>
         <div class="form">
-          <input id="memoryUserKey" placeholder="杈撳叆 userKey锛屾煡鐪嬭繖涓細鍛樿璁颁綇浜嗕粈涔? />
-          <button id="loadMemoryBtn">鏌ョ湅浼氬憳璁板繂</button>
+          <input id="memoryUserKey" placeholder="输入 userKey，查看这位会员被记住了什么" />
+          <button id="loadMemoryBtn">查看会员记忆</button>
           <div class="status" id="memoryStatus"></div>
         </div>
-        <div id="memoryDetail" class="memory-panel muted">鍏堣緭鍏?userKey锛屽啀鏌ョ湅杩欎釜浼氬憳鐨勯暱鏈熷叧娉ㄣ€佸弽澶嶅崱鐐广€佸洖绛斿亸濂藉拰涓婃娌¤亰瀹岀殑鐐广€?/div>
+        <div id="memoryDetail" class="memory-panel muted">先输入 userKey，再查看这位会员的长期关注、反复卡点、回答偏好和上次没聊完的话题。</div>
 
-        <h2 style="margin-top:20px;">鏈€杩戜細鍛樿蹇嗘瑙?/h2>
+        <h2 style="margin-top:20px;">最近会员记忆概览</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
-          <input id="memorySearch" placeholder="鎼滅储 userKey / 鏄电О / 閭 / 鎵嬫満鍙? />
+          <input id="memorySearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号" />
         </div>
         <table>
           <thead>
             <tr>
-              <th>鐢ㄦ埛</th>
-              <th>鍏宠仈淇℃伅</th>
-              <th>闀挎湡鍏虫敞</th>
-              <th>涓婃鏈畬缁撶偣</th>
-              <th>鍥炵瓟鍋忓ソ</th>
+              <th>用户</th>
+              <th>关联信息</th>
+              <th>长期关注</th>
+              <th>上次未完结点</th>
+              <th>回答偏好</th>
             </tr>
           </thead>
           <tbody id="memoryBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">浠樿垂鎰忓悜鐪嬫澘</h2>
+        <h2 style="margin-top:20px;">付费意向看板</h2>
         <div class="storage-grid" style="margin-top:12px; margin-bottom:12px;">
           <div class="storage-card">
-            <div class="storage-label">杩?7 澶╂彁浜?/div>
+            <div class="storage-label">近 7 天提交</div>
             <div class="storage-value" id="leadRecentValue">--</div>
           </div>
           <div class="storage-card">
-            <div class="storage-label">骞村害鏂规</div>
+            <div class="storage-label">年度方案</div>
             <div class="storage-value" id="leadAnnualValue">--</div>
           </div>
           <div class="storage-card">
-            <div class="storage-label">鏈堝害鏂规</div>
+            <div class="storage-label">月度方案</div>
             <div class="storage-value" id="leadMonthlyValue">--</div>
           </div>
         </div>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
           <select id="leadPlanFilter">
-            <option value="all">鍏ㄩ儴鏂规</option>
-            <option value="annual">鍙湅骞村害</option>
-            <option value="monthly">鍙湅鏈堝害</option>
+              <option value="all">全部方案</option>
+              <option value="annual">只看年度</option>
+              <option value="monthly">只看月度</option>
           </select>
           <select id="leadContactFilter">
-            <option value="all">鍏ㄩ儴绾跨储</option>
-            <option value="email">鍙湅鏈夐偖绠?/option>
-            <option value="phone">鍙湅鏈夋墜鏈哄彿</option>
-            <option value="both">閭鍜屾墜鏈哄彿閮芥湁</option>
+              <option value="all">全部线索</option>
+              <option value="email">只看有邮箱</option>
+              <option value="phone">只看有手机号</option>
+              <option value="both">邮箱和手机号都有</option>
           </select>
         </div>
         <table>
           <thead>
             <tr>
-              <th>鎻愪氦鏃堕棿</th>
-              <th>鐢ㄦ埛淇℃伅</th>
-              <th>鏂规</th>
-              <th>鑱旂郴鏂瑰紡</th>
-              <th>鍏虫敞闂</th>
+              <th>提交时间</th>
+              <th>用户信息</th>
+              <th>方案</th>
+              <th>联系方式</th>
+              <th>关注问题</th>
             </tr>
           </thead>
           <tbody id="leadBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">寰呯‘璁や粯娆惧悕鍗?/h2>
+        <h2 style="margin-top:20px;">待确认付款名单</h2>
         <table>
           <thead>
             <tr>
-              <th>鎻愪氦鏃堕棿</th>
-              <th>鐢ㄦ埛</th>
-              <th>鏂规 / 鏀粯鏂瑰紡</th>
-              <th>浠樻淇℃伅</th>
-              <th>鍑瘉</th>
-              <th>鎿嶄綔</th>
+              <th>提交时间</th>
+              <th>用户</th>
+              <th>方案 / 支付方式</th>
+              <th>付款信息</th>
+              <th>凭证</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="manualPaymentBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">宸插紑閫氫粯娆捐褰?/h2>
+        <h2 style="margin-top:20px;">已开通付款记录</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
-          <input id="approvedPaymentSearch" placeholder="鎼滅储 userKey / 鏄电О / 閭 / 鎵嬫満鍙? />
+          <input id="approvedPaymentSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号" />
         </div>
         <table>
           <thead>
             <tr>
-              <th>寮€閫氭椂闂?/th>
-              <th>鐢ㄦ埛</th>
-              <th>鏂规 / 鏀粯鏂瑰紡</th>
-              <th>浠樻淇℃伅</th>
-              <th>鍑瘉</th>
-              <th>澶囨敞</th>
+              <th>开通时间</th>
+              <th>用户</th>
+              <th>方案 / 支付方式</th>
+              <th>付款信息</th>
+              <th>凭证</th>
+              <th>备注</th>
             </tr>
           </thead>
           <tbody id="approvedPaymentBody"></tbody>
@@ -504,9 +504,9 @@ router.get('/ai-usage', (req, res) => {
     dateInput.value = new Date().toISOString().slice(0, 10);
     document.getElementById('quotaDateKey').value = new Date().toISOString().slice(0, 10);
 
-    function joinText(list, fallback = '鏆傛棤') {
+    function joinText(list, fallback = '暂无') {
       return Array.isArray(list) && list.filter(Boolean).length
-        ? list.filter(Boolean).join('銆?)
+        ? list.filter(Boolean).join('、')
         : fallback;
     }
 
@@ -523,15 +523,15 @@ router.get('/ai-usage', (req, res) => {
       });
       const payload = await response.json();
       if (!response.ok || payload?.ok === false) {
-        throw new Error(payload?.error || '璇锋眰澶辫触');
+        throw new Error(payload?.error || '请求失败');
       }
       return payload?.data || {};
     }
 
     function membershipPill(item) {
       return item?.isPremium
-        ? ''<span class="pill premium">浼氬憳</span>''
-        : ''<span class="pill free">鍏嶈垂</span>'';
+        ? '<span class="pill premium">会员</span>'
+        : '<span class="pill free">免费</span>';
     }
 
     function buildAdminSection(title, nodes, sectionId, shouldOpen = false) {
@@ -630,13 +630,13 @@ router.get('/ai-usage', (req, res) => {
     function renderUsage(items) {
       usageBody.innerHTML = items.length
         ? items.map((item) => '<tr>' +
-          '<td><div><strong>' + (item.nickname || '鏈懡鍚?) + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, item.city].filter(Boolean).join(' / ') + '</div><div class="muted">' + [item.roleText, item.focusText].filter(Boolean).join(' / ') + '</div></td>' +
+            '<td><div><strong>' + (item.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, item.city].filter(Boolean).join(' / ') + '</div><div class="muted">' + [item.roleText, item.focusText].filter(Boolean).join(' / ') + '</div></td>' +
           '<td>' + item.used + '</td>' +
           '<td>' + item.remaining + ' / ' + item.dailyLimit + (item.extraQuota ? ' <span class="muted">(+ ' + item.extraQuota + ')</span>' : '') + '</td>' +
           '<td>' + membershipPill(item) + '</td>' +
           '<td class="muted">' + (item.lastUsedAt || '--') + '</td>' +
           '</tr>').join('')
-        : '<tr><td colspan="5" class="muted">浠婂ぉ杩樻病鏈?AI 浣跨敤璁板綍銆?/td></tr>';
+        : '<tr><td colspan="5" class="muted">今天还没有 AI 使用记录。</td></tr>';
     }
 
     function getMembershipRelatedProfile(item) {
@@ -679,21 +679,21 @@ router.get('/ai-usage', (req, res) => {
       membershipBody.innerHTML = filteredItems.length
         ? filteredItems.map((item) => {
           const related = getMembershipRelatedProfile(item);
-          const tierText = item.tier === 'premium' ? '浼氬憳' : '鍏嶈垂';
-          const statusText = item.status === 'active' ? '鐢熸晥涓? : '鏈敓鏁?;
+          const tierText = item.tier === 'premium' ? '会员' : '免费';
+          const statusText = item.status === 'active' ? '生效中' : '未生效';
           const isExpanded = Boolean(expandedMembershipRows[item.userKey]);
           const summaryRow = '<tr>' +
-            '<td><div><strong>' + (related.nickname || '鏈暀鏄电О') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
-            '<td>' + tierText + (item.expiresAt ? '<div class="muted">鍒版湡锛? + item.expiresAt + '</div>' : '') + '</td>' +
-            '<td>' + statusText + '<div class="muted">鏇存柊锛? + (item.updatedAt || '--') + '</div></td>' +
-            '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '鏀惰捣璧勬枡' : '灞曞紑璧勬枡') + '</button></td>' +
+            '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
+            '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
+            '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
+            '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '收起资料' : '展开资料') + '</button></td>' +
             '</tr>';
           const detailRow = isExpanded
-            ? '<tr><td colspan="4" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>娉ㄥ唽璧勬枡锛?/strong>' + (related.email || '鏈暀閭') + ' / ' + (related.phone || '鏈暀鎵嬫満鍙?) + ' / ' + (related.city || '鏈暀鍩庡競') + '</div><div class="muted"><strong>瑙掕壊涓庡叧娉細</strong>' + (item.roleText || '鏈暀瑙掕壊') + ' / ' + (item.focusText || '鏈暀鍏虫敞鏂瑰悜') + '</div><div class="muted"><strong>鏈嶅姟澶囨敞锛?/strong>' + (item.notes || '鏃犲娉?) + '</div></div></td></tr>'
+            ? '<tr><td colspan="4" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>注册资料：</strong>' + (related.email || '未留邮箱') + ' / ' + (related.phone || '未留手机号') + ' / ' + (related.city || '未留城市') + '</div><div class="muted"><strong>角色与关注：</strong>' + (item.roleText || '未留角色') + ' / ' + (item.focusText || '未留关注方向') + '</div><div class="muted"><strong>服务备注：</strong>' + (item.notes || '无备注') + '</div></div></td></tr>'
             : '';
           return summaryRow + detailRow;
         }).join('')
-        : '<tr><td colspan="4" class="muted">杩樻病鏈夌鍚堟潯浠剁殑浼氬憳璁板綍銆?/td></tr>';
+        : '<tr><td colspan="4" class="muted">还没有符合条件的会员记录。</td></tr>';
     }
 
     function getMemoryRelatedProfile(item) {
@@ -735,48 +735,48 @@ router.get('/ai-usage', (req, res) => {
       memoryBody.innerHTML = filteredItems.length
         ? filteredItems.map((item) => {
           const related = getMemoryRelatedProfile(item);
-          const focus = joinText(item.profileMemory?.longTermFocus, '鏈舰鎴?);
-          const openLoop = item.sessionMemory?.lastOpenLoop || '鏆傛棤';
+          const focus = joinText(item.profileMemory?.longTermFocus, '未形成');
+          const openLoop = item.sessionMemory?.lastOpenLoop || '暂无';
           const prefs = [
-            item.responsePreference?.likesStrongConclusion ? '鍠滄鐩存帴缁撹' : '',
-            item.responsePreference?.likesMysticLanguage ? '鍋忔湳璇? : '',
-            item.responsePreference?.likesModernExplanation ? '瑕佺幇浠ｈВ閲? : '',
-            item.responsePreference?.avoidVerboseTemplate ? '涓嶇埍妯℃澘鑵? : '',
-          ].filter(Boolean).join(' / ') || '鏈舰鎴?;
+            item.responsePreference?.likesStrongConclusion ? '喜欢直接结论' : '',
+            item.responsePreference?.likesMysticLanguage ? '偏术语' : '',
+            item.responsePreference?.likesModernExplanation ? '要现代解释' : '',
+            item.responsePreference?.avoidVerboseTemplate ? '不爱模板腔' : '',
+          ].filter(Boolean).join(' / ') || '未形成';
           return '<tr>' +
             '<td><div class="mono">' + item.userKey + '</div></td>' +
-            '<td><div><strong>' + (related.nickname || '鏈暀鏄电О') + '</strong></div><div class="muted">' + (related.email || '鏈暀閭') + '</div><div class="muted">' + (related.phone || '鏈暀鎵嬫満鍙?) + '</div><div class="muted">' + (related.city || '鏈暀鍩庡競') + '</div></td>' +
+            '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="muted">' + (related.email || '未留邮箱') + '</div><div class="muted">' + (related.phone || '未留手机号') + '</div><div class="muted">' + (related.city || '未留城市') + '</div></td>' +
             '<td>' + focus + '</td>' +
             '<td>' + openLoop + '</td>' +
             '<td>' + prefs + '</td>' +
             '</tr>';
         }).join('')
-        : '<tr><td colspan="5" class="muted">杩樻病鏈夌鍚堟潯浠剁殑浼氬憳璁板繂璁板綍銆?/td></tr>';
+        : '<tr><td colspan="5" class="muted">还没有符合条件的会员记忆记录。</td></tr>';
     }
 
     function renderMemoryDetail(memory) {
-      const focus = joinText(memory.profileMemory?.longTermFocus, '鏈舰鎴?);
-      const pain = joinText(memory.profileMemory?.recurringPainPoints, '鏈舰鎴?);
-      const compared = joinText(memory.sessionMemory?.lastComparedOptions, '鏃?);
+      const focus = joinText(memory.profileMemory?.longTermFocus, '未形成');
+      const pain = joinText(memory.profileMemory?.recurringPainPoints, '未形成');
+      const compared = joinText(memory.sessionMemory?.lastComparedOptions, '无');
       const prefs = [
-        memory.responsePreference?.likesStrongConclusion ? '鍠滄鐩存帴缁撹' : '',
-        memory.responsePreference?.likesMysticLanguage ? '鎺ュ彈鐜勫鏈' : '',
-        memory.responsePreference?.likesModernExplanation ? '甯屾湜鏈変汉璇濊В閲? : '',
-        memory.responsePreference?.likesComparisonAnswer ? '甯搁棶姣旇緝棰? : '',
-        memory.responsePreference?.likesFollowupQuestion ? '鎺ュ彈杩介棶' : '',
-        memory.responsePreference?.avoidVerboseTemplate ? '涓嶅枩娆㈡ā鏉块暱绛? : '',
-      ].filter(Boolean).join('銆?) || '鏈舰鎴?;
+        memory.responsePreference?.likesStrongConclusion ? '喜欢直接结论' : '',
+        memory.responsePreference?.likesMysticLanguage ? '接受玄学术语' : '',
+        memory.responsePreference?.likesModernExplanation ? '希望有人话解释' : '',
+        memory.responsePreference?.likesComparisonAnswer ? '常问比较题' : '',
+        memory.responsePreference?.likesFollowupQuestion ? '接受追问' : '',
+        memory.responsePreference?.avoidVerboseTemplate ? '不喜欢模板长答' : '',
+      ].filter(Boolean).join('、') || '未形成';
 
       memoryDetail.innerHTML = [
-        '<div class="memory-line"><strong>鐢ㄦ埛閿細</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
-        '<div class="memory-line"><strong>闀挎湡鍏虫敞锛?/strong>' + focus + '</div>',
-        '<div class="memory-line"><strong>鍙嶅鍗＄偣锛?/strong>' + pain + '</div>',
-        '<div class="memory-line"><strong>涓婃鏍稿績鍒ゆ柇锛?/strong>' + (memory.sessionMemory?.lastCoreJudgment || '鏆傛棤') + '</div>',
-        '<div class="memory-line"><strong>涓婃缁欑殑鍔ㄤ綔锛?/strong>' + (memory.sessionMemory?.lastActionGiven || '鏆傛棤') + '</div>',
-        '<div class="memory-line"><strong>涓婃鏈畬缁撶偣锛?/strong>' + (memory.sessionMemory?.lastOpenLoop || '鏆傛棤') + '</div>',
-        '<div class="memory-line"><strong>涓婃姣旇緝棰橈細</strong>' + compared + '</div>',
-        '<div class="memory-line"><strong>鏈€杩戞儏缁蛋鍔匡細</strong>' + (memory.sessionMemory?.recentMoodTrend || 'unknown') + '</div>',
-        '<div class="memory-line"><strong>鍥炵瓟鍋忓ソ锛?/strong>' + prefs + '</div>',
+        '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
+        '<div class="memory-line"><strong>长期关注：</strong>' + focus + '</div>',
+        '<div class="memory-line"><strong>反复卡点：</strong>' + pain + '</div>',
+        '<div class="memory-line"><strong>上次核心判断：</strong>' + (memory.sessionMemory?.lastCoreJudgment || '暂无') + '</div>',
+        '<div class="memory-line"><strong>上次给的动作：</strong>' + (memory.sessionMemory?.lastActionGiven || '暂无') + '</div>',
+        '<div class="memory-line"><strong>上次未完结点：</strong>' + (memory.sessionMemory?.lastOpenLoop || '暂无') + '</div>',
+        '<div class="memory-line"><strong>上次比较题：</strong>' + compared + '</div>',
+        '<div class="memory-line"><strong>最近情绪走势：</strong>' + (memory.sessionMemory?.recentMoodTrend || 'unknown') + '</div>',
+        '<div class="memory-line"><strong>回答偏好：</strong>' + prefs + '</div>',
       ].join('');
     }
 
@@ -810,9 +810,9 @@ router.get('/ai-usage', (req, res) => {
       const monthlyCount = items.filter((item) => item.selectedPlan === 'monthly').length;
       const recentCount = items.filter(isRecentLead).length;
 
-      leadAnnualValue.textContent = annualCount + ' 鏉?;
-      leadMonthlyValue.textContent = monthlyCount + ' 鏉?;
-      leadRecentValue.textContent = recentCount + ' 鏉?;
+      leadAnnualValue.textContent = annualCount + ' 条';
+      leadMonthlyValue.textContent = monthlyCount + ' 条';
+      leadRecentValue.textContent = recentCount + ' 条';
     }
 
     function renderPaywallLeads(items) {
@@ -825,22 +825,22 @@ router.get('/ai-usage', (req, res) => {
           const hasEmail = Boolean(String(item.email || '').trim());
           const hasPhone = Boolean(String(item.phone || '').trim());
           const contactText = hasEmail && hasPhone
-            ? '閭 + 鎵嬫満'
+            ? '邮箱 + 手机'
             : hasEmail
-              ? '浠呴偖绠?
+              ? '仅邮箱'
               : hasPhone
-                ? '浠呮墜鏈?
-                : '鏈暀鑱旂郴鏂瑰紡';
+                ? '仅手机'
+                : '未留联系方式';
 
           return '<tr>' +
             '<td class="muted">' + (item.createdAt || '--') + '</td>' +
-            '<td><div><strong>' + (item.nickname || '鏈暀绉板懠') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '鏈暀鍩庡競') + '</div></td>' +
-            '<td><strong>' + (item.selectedPlan === 'annual' ? '骞村害浼氬憳' : '鏈堝害浼氬憳') + '</strong><div class="muted">' + (item.source || '--') + '</div></td>' +
-            '<td><div>' + (item.email || '鏈暀閭') + '</div><div class="muted">' + (item.phone || '鏈暀鎵嬫満鍙?) + '</div><div class="muted">' + contactText + '</div></td>' +
-            '<td>' + (item.focus || '鏈～鍐?) + '</td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div></td>' +
+            '<td><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong><div class="muted">' + (item.source || '--') + '</div></td>' +
+            '<td><div>' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div><div class="muted">' + contactText + '</div></td>' +
+            '<td>' + (item.focus || '未填写') + '</td>' +
             '</tr>';
         }).join('')
-        : '<tr><td colspan="5" class="muted">褰撳墠绛涢€夋潯浠朵笅杩樻病鏈夋柊鐨勪粯璐规剰鍚戙€?/td></tr>';
+        : '<tr><td colspan="5" class="muted">当前筛选条件下还没有新的付费意向。</td></tr>';
     }
 
     function renderManualPaymentReviews(items) {
@@ -848,22 +848,22 @@ router.get('/ai-usage', (req, res) => {
       manualPaymentBody.innerHTML = items.length
         ? items.map((item) => {
           const preview = item.screenshotDataUrl
-            ? '<img src="' + item.screenshotDataUrl + '" alt="浠樻鍑瘉" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" />'
-            : '<span class="muted">鏈笂浼犳埅鍥?/span>';
+            ? '<img src="' + item.screenshotDataUrl + '" alt="付款凭证" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" />'
+            : '<span class="muted">未上传截图</span>';
           const approveButton = item.status === 'approved'
-            ? '<span class="pill premium">宸插紑閫?/span>'
-            : '<button data-approve-review="' + item.id + '" style="background:linear-gradient(135deg,#6ecfc0,#4aa7a1);color:#fff;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">涓€閿紑閫氫細鍛?/button>';
+            ? '<span class="pill premium">已开通</span>'
+            : '<button data-approve-review="' + item.id + '" style="background:linear-gradient(135deg,#6ecfc0,#4aa7a1);color:#fff;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">一键开通会员</button>';
 
           return '<tr>' +
             '<td class="muted">' + (item.createdAt || '--') + '</td>' +
-            '<td><div><strong>' + (item.nickname || '鏈暀绉板懠') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '鏈暀鍩庡競') + '</div><div class="muted">' + (item.email || '鏈暀閭') + '</div><div class="muted">' + (item.phone || '鏈暀鎵嬫満鍙?) + '</div></td>' +
-            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '骞村害浼氬憳' : '鏈堝害浼氬憳') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '寰俊鏀舵鐮? : '鏀粯瀹濇敹娆剧爜') + '</div><div class="muted">' + (item.status === 'approved' ? '宸插紑閫? : '寰呯‘璁?) + '</div></td>' +
-            '<td><div>閲戦锛? + (item.amountText || '鏈～') + '</div><div class="muted">浠樻鏃堕棿锛? + (item.paidAtText || '鏈～') + '</div><div class="muted">' + (item.notes || '鏃犲娉?) + '</div></td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div><div class="muted">' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
+            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '微信收款码' : '支付宝收款码') + '</div><div class="muted">' + (item.status === 'approved' ? '已开通' : '待确认') + '</div></td>' +
+            '<td><div>金额：' + (item.amountText || '未填') + '</div><div class="muted">付款时间：' + (item.paidAtText || '未填') + '</div><div class="muted">' + (item.notes || '无备注') + '</div></td>' +
             '<td>' + preview + '</td>' +
             '<td>' + approveButton + '</td>' +
             '</tr>';
         }).join('')
-        : '<tr><td colspan="6" class="muted">杩樻病鏈夊緟纭浠樻璁板綍銆?/td></tr>';
+        : '<tr><td colspan="6" class="muted">还没有待确认付款记录。</td></tr>';
     }
 
     function getFilteredApprovedPayments(items) {
@@ -889,19 +889,19 @@ router.get('/ai-usage', (req, res) => {
       approvedPaymentBody.innerHTML = filteredItems.length
         ? filteredItems.map((item) => {
           const preview = item.screenshotDataUrl
-            ? '<a href="' + item.screenshotDataUrl + '" target="_blank" rel="noreferrer"><img src="' + item.screenshotDataUrl + '" alt="浠樻鍑瘉" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" /></a>'
-            : '<span class="muted">鏈笂浼犳埅鍥?/span>';
+            ? '<a href="' + item.screenshotDataUrl + '" target="_blank" rel="noreferrer"><img src="' + item.screenshotDataUrl + '" alt="付款凭证" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" /></a>'
+            : '<span class="muted">未上传截图</span>';
 
           return '<tr>' +
             '<td class="muted">' + (item.reviewedAt || item.createdAt || '--') + '</td>' +
-            '<td><div><strong>' + (item.nickname || '鏈暀绉板懠') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '鏈暀鍩庡競') + '</div><div class="muted">' + (item.email || '鏈暀閭') + '</div><div class="muted">' + (item.phone || '鏈暀鎵嬫満鍙?) + '</div></td>' +
-            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '骞村害浼氬憳' : '鏈堝害浼氬憳') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '寰俊鏀舵鐮? : '鏀粯瀹濇敹娆剧爜') + '</div><div class="muted">宸插紑閫?/div></td>' +
-            '<td><div>閲戦锛? + (item.amountText || '鏈～') + '</div><div class="muted">浠樻鏃堕棿锛? + (item.paidAtText || '鏈～') + '</div></td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div><div class="muted">' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
+            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '微信收款码' : '支付宝收款码') + '</div><div class="muted">已开通</div></td>' +
+            '<td><div>金额：' + (item.amountText || '未填') + '</div><div class="muted">付款时间：' + (item.paidAtText || '未填') + '</div></td>' +
             '<td>' + preview + '</td>' +
-            '<td><div class="muted">' + (item.reviewedNotes || item.notes || '鏃犲娉?) + '</div></td>' +
+            '<td><div class="muted">' + (item.reviewedNotes || item.notes || '无备注') + '</div></td>' +
             '</tr>';
         }).join('')
-        : '<tr><td colspan="6" class="muted">杩樻病鏈夊凡寮€閫氫粯娆捐褰曘€?/td></tr>';
+        : '<tr><td colspan="6" class="muted">还没有已开通付款记录。</td></tr>';
     }
 
     function renderStorage(storage) {
@@ -912,21 +912,21 @@ router.get('/ai-usage', (req, res) => {
     }
 
     async function approveManualPayment(id) {
-      topStatus.textContent = '姝ｅ湪寮€閫氫細鍛?..';
+      topStatus.textContent = '正在开通会员...';
       try {
         await requestJson('/admin/api/manual-payment-approve', {
           method: 'POST',
           body: JSON.stringify({ id }),
         });
-        topStatus.textContent = '宸插紑閫氫細鍛樸€?;
+        topStatus.textContent = '已开通会员。';
         await loadOverview();
       } catch (error) {
-        topStatus.textContent = '寮€閫氬け璐ワ細' + error.message;
+        topStatus.textContent = '开通失败：' + error.message;
       }
     }
 
     async function loadOverview() {
-      topStatus.textContent = '姝ｅ湪鍒锋柊...';
+      topStatus.textContent = '正在刷新...';
       try {
         const [usage, memberships, memories, storage, leads, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
@@ -944,14 +944,14 @@ router.get('/ai-usage', (req, res) => {
         renderPaywallLeads(leads.items || []);
         renderManualPaymentReviews(manualPayments.items || []);
         renderApprovedPaymentReviews(approvedManualPayments.items || []);
-        topStatus.textContent = '宸插埛鏂般€?;
+        topStatus.textContent = '已刷新。';
       } catch (error) {
-        topStatus.textContent = '鍒锋柊澶辫触锛? + error.message;
+        topStatus.textContent = '刷新失败：' + error.message;
       }
     }
 
     async function saveMembership() {
-      saveStatus.textContent = '姝ｅ湪淇濆瓨...';
+      saveStatus.textContent = '正在保存...';
       try {
         const payload = {
           userKey: document.getElementById('userKey').value.trim(),
@@ -961,21 +961,21 @@ router.get('/ai-usage', (req, res) => {
           notes: document.getElementById('notes').value.trim(),
         };
         if (!payload.userKey) {
-          throw new Error('璇峰厛杈撳叆 userKey');
+          throw new Error('请先输入 userKey');
         }
         const result = await requestJson('/admin/api/set-membership', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        saveStatus.textContent = '淇濆瓨鎴愬姛锛? + result.membership.userKey + ' -> ' + result.membership.tier;
+        saveStatus.textContent = '保存成功：' + result.membership.userKey + ' -> ' + result.membership.tier;
         await loadOverview();
       } catch (error) {
-        saveStatus.textContent = '淇濆瓨澶辫触锛? + error.message;
+        saveStatus.textContent = '保存失败：' + error.message;
       }
     }
 
     async function saveExtraQuota() {
-      quotaStatus.textContent = '姝ｅ湪淇濆瓨...';
+      quotaStatus.textContent = '正在保存...';
       try {
         const payload = {
           userKey: document.getElementById('quotaUserKey').value.trim(),
@@ -984,36 +984,36 @@ router.get('/ai-usage', (req, res) => {
           notes: document.getElementById('quotaNotes').value.trim(),
         };
         if (!payload.userKey) {
-          throw new Error('璇峰厛杈撳叆 userKey');
+          throw new Error('请先输入 userKey');
         }
         const result = await requestJson('/admin/api/set-extra-quota', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        quotaStatus.textContent = '淇濆瓨鎴愬姛锛? + result.quotaOverride.userKey + ' -> +' + result.quotaOverride.extraCount + ' 娆?;
+        quotaStatus.textContent = '保存成功：' + result.quotaOverride.userKey + ' -> +' + result.quotaOverride.extraCount + ' 次';
         await loadOverview();
       } catch (error) {
-        quotaStatus.textContent = '淇濆瓨澶辫触锛? + error.message;
+        quotaStatus.textContent = '保存失败：' + error.message;
       }
     }
 
     async function loadMemberMemory() {
-      memoryStatus.textContent = '姝ｅ湪璇诲彇浼氬憳璁板繂...';
+      memoryStatus.textContent = '正在读取会员记忆...';
       try {
         const payload = {
           userKey: document.getElementById('memoryUserKey').value.trim(),
         };
         if (!payload.userKey) {
-          throw new Error('璇峰厛杈撳叆 userKey');
+          throw new Error('请先输入 userKey');
         }
         const result = await requestJson('/admin/api/member-memory', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
         renderMemoryDetail(result.memory || {});
-        memoryStatus.textContent = '浼氬憳璁板繂宸插姞杞姐€?;
+        memoryStatus.textContent = '会员记忆已加载。';
       } catch (error) {
-        memoryStatus.textContent = '璇诲彇澶辫触锛? + error.message;
+        memoryStatus.textContent = '读取失败：' + error.message;
       }
     }
 
