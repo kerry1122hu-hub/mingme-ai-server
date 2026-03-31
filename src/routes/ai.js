@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { runChat, runReading, runTranscription } = require('../services/openaiService');
 const { getQuotaStatus, consumeQuota, getMembershipStatus } = require('../services/quotaService');
+const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -115,6 +116,36 @@ router.post('/membership-status', async (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/track-event', async (req, res) => {
+  try {
+    const {
+      eventName,
+      eventSource,
+      userKey,
+      sessionId,
+      page,
+      platform,
+      payload,
+    } = req.body || {};
+
+    const event = trackAnalyticsEvent({
+      eventName,
+      eventSource,
+      userKey,
+      sessionId,
+      page,
+      platform,
+      payload,
+    });
+
+    res.locals.outputLength = JSON.stringify(event).length;
+    return res.json(ok({ event }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'track event failed', 'TRACK_EVENT_FAILED'));
   }
 });
 
