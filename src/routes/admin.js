@@ -338,13 +338,18 @@ router.get('/ai-usage', (req, res) => {
           <div class="status" id="quotaStatus"></div>
         </div>
 
-        <h2 style="margin-top:20px;">最近会员状态</h2>
+        <h2 style="margin-top:20px;">会员列表</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="membershipSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号 / 城市" />
+        </div>
         <table>
           <thead>
             <tr>
               <th>用户</th>
+              <th>注册资料</th>
               <th>档位</th>
               <th>状态</th>
+              <th>服务备注</th>
             </tr>
           </thead>
           <tbody id="membershipBody"></tbody>
@@ -359,10 +364,14 @@ router.get('/ai-usage', (req, res) => {
         <div id="memoryDetail" class="memory-panel muted">先输入 userKey，再查看这个会员的长期关注、反复卡点、回答偏好和上次没聊完的点。</div>
 
         <h2 style="margin-top:20px;">最近会员记忆概览</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="memorySearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号" />
+        </div>
         <table>
           <thead>
             <tr>
               <th>用户</th>
+              <th>关联信息</th>
               <th>长期关注</th>
               <th>上次未完结点</th>
               <th>回答偏好</th>
@@ -426,6 +435,24 @@ router.get('/ai-usage', (req, res) => {
           </thead>
           <tbody id="manualPaymentBody"></tbody>
         </table>
+
+        <h2 style="margin-top:20px;">已开通付款记录</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="approvedPaymentSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>开通时间</th>
+              <th>用户</th>
+              <th>方案 / 支付方式</th>
+              <th>付款信息</th>
+              <th>凭证</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody id="approvedPaymentBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -433,14 +460,18 @@ router.get('/ai-usage', (req, res) => {
     const token = "${token}";
     const usageBody = document.getElementById('usageBody');
     const membershipBody = document.getElementById('membershipBody');
+    const membershipSearch = document.getElementById('membershipSearch');
     const memoryBody = document.getElementById('memoryBody');
+    const memorySearch = document.getElementById('memorySearch');
     const leadBody = document.getElementById('leadBody');
     const manualPaymentBody = document.getElementById('manualPaymentBody');
+    const approvedPaymentBody = document.getElementById('approvedPaymentBody');
     const leadRecentValue = document.getElementById('leadRecentValue');
     const leadAnnualValue = document.getElementById('leadAnnualValue');
     const leadMonthlyValue = document.getElementById('leadMonthlyValue');
     const leadPlanFilter = document.getElementById('leadPlanFilter');
     const leadContactFilter = document.getElementById('leadContactFilter');
+    const approvedPaymentSearch = document.getElementById('approvedPaymentSearch');
     const dateInput = document.getElementById('dateKey');
     const topStatus = document.getElementById('topStatus');
     const dbFileValue = document.getElementById('dbFileValue');
@@ -450,7 +481,11 @@ router.get('/ai-usage', (req, res) => {
     const quotaStatus = document.getElementById('quotaStatus');
     const memoryStatus = document.getElementById('memoryStatus');
     const memoryDetail = document.getElementById('memoryDetail');
+    let latestMembershipItems = [];
+    let latestMemoryItems = [];
     let latestLeadItems = [];
+    let latestManualPaymentItems = [];
+    let latestApprovedPaymentItems = [];
 
     dateInput.value = new Date().toISOString().slice(0, 10);
     document.getElementById('quotaDateKey').value = new Date().toISOString().slice(0, 10);
@@ -497,19 +532,98 @@ router.get('/ai-usage', (req, res) => {
         : '<tr><td colspan="5" class="muted">今天还没有 AI 使用记录。</td></tr>';
     }
 
+    function getMembershipRelatedProfile(item) {
+      const userKey = String(item?.userKey || '').trim();
+      const fromManual = latestManualPaymentItems.find((entry) => entry.userKey === userKey) || {};
+      const fromApproved = latestApprovedPaymentItems.find((entry) => entry.userKey === userKey) || {};
+      const fromLead = latestLeadItems.find((entry) => entry.userKey === userKey) || {};
+
+      return {
+        nickname: item.nickname || fromApproved.nickname || fromManual.nickname || fromLead.nickname || '',
+        city: item.city || fromApproved.city || fromManual.city || fromLead.city || '',
+        email: fromApproved.email || fromManual.email || fromLead.email || '',
+        phone: fromApproved.phone || fromManual.phone || fromLead.phone || '',
+      };
+    }
+
+    function getFilteredMemberships(items) {
+      const keyword = String(membershipSearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const related = getMembershipRelatedProfile(item);
+        const searchBase = [
+          item.userKey,
+          related.nickname,
+          related.city,
+          related.email,
+          related.phone,
+          item.birthText,
+          item.roleText,
+          item.focusText,
+          item.notes,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
     function renderMemberships(items) {
-      membershipBody.innerHTML = items.length
-        ? items.map((item) => '<tr>' +
-          '<td><div><strong>' + (item.nickname || '未命名') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, item.city].filter(Boolean).join(' / ') + '</div></td>' +
-          '<td>' + (item.tier || 'free') + '</td>' +
-          '<td>' + (item.status || 'active') + '</td>' +
-          '</tr>').join('')
-        : '<tr><td colspan="3" class="muted">还没有会员记录。</td></tr>';
+      latestMembershipItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredMemberships(latestMembershipItems);
+      membershipBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const related = getMembershipRelatedProfile(item);
+          const tierText = item.tier === 'premium' ? '会员' : '免费';
+          const statusText = item.status === 'active' ? '生效中' : '未生效';
+          return '<tr>' +
+            '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
+            '<td><div>' + (related.email || '未留邮箱') + '</div><div class="muted">' + (related.phone || '未留手机号') + '</div><div class="muted">' + (item.roleText || '未留角色') + '</div><div class="muted">' + (item.focusText || '未留关注方向') + '</div></td>' +
+            '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
+            '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
+            '<td><div class="muted">' + (item.notes || '无备注') + '</div></td>' +
+            '</tr>';
+        }).join('')
+        : '<tr><td colspan="5" class="muted">还没有符合条件的会员记录。</td></tr>';
+    }
+
+    function getMemoryRelatedProfile(item) {
+      const userKey = String(item?.userKey || '').trim();
+      const fromMembership = latestMembershipItems.find((entry) => entry.userKey === userKey) || {};
+      const fromManual = latestManualPaymentItems.find((entry) => entry.userKey === userKey) || {};
+      const fromApproved = latestApprovedPaymentItems.find((entry) => entry.userKey === userKey) || {};
+      const fromLead = latestLeadItems.find((entry) => entry.userKey === userKey) || {};
+
+      return {
+        nickname: fromManual.nickname || fromApproved.nickname || fromLead.nickname || fromMembership.nickname || '',
+        email: fromManual.email || fromApproved.email || fromLead.email || '',
+        phone: fromManual.phone || fromApproved.phone || fromLead.phone || '',
+        city: fromManual.city || fromApproved.city || fromLead.city || fromMembership.city || '',
+      };
+    }
+
+    function getFilteredMemories(items) {
+      const keyword = String(memorySearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const related = getMemoryRelatedProfile(item);
+        const searchBase = [
+          item.userKey,
+          related.nickname,
+          related.email,
+          related.phone,
+          related.city,
+          ...(item.profileMemory?.longTermFocus || []),
+          item.sessionMemory?.lastOpenLoop,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
     }
 
     function renderMemoryList(items) {
-      memoryBody.innerHTML = items.length
-        ? items.map((item) => {
+      latestMemoryItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredMemories(latestMemoryItems);
+      memoryBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const related = getMemoryRelatedProfile(item);
           const focus = joinText(item.profileMemory?.longTermFocus, '未形成');
           const openLoop = item.sessionMemory?.lastOpenLoop || '暂无';
           const prefs = [
@@ -520,12 +634,13 @@ router.get('/ai-usage', (req, res) => {
           ].filter(Boolean).join(' / ') || '未形成';
           return '<tr>' +
             '<td><div class="mono">' + item.userKey + '</div></td>' +
+            '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="muted">' + (related.email || '未留邮箱') + '</div><div class="muted">' + (related.phone || '未留手机号') + '</div><div class="muted">' + (related.city || '未留城市') + '</div></td>' +
             '<td>' + focus + '</td>' +
             '<td>' + openLoop + '</td>' +
             '<td>' + prefs + '</td>' +
             '</tr>';
         }).join('')
-        : '<tr><td colspan="4" class="muted">还没有会员记忆记录。</td></tr>';
+        : '<tr><td colspan="5" class="muted">还没有符合条件的会员记忆记录。</td></tr>';
     }
 
     function renderMemoryDetail(memory) {
@@ -618,6 +733,7 @@ router.get('/ai-usage', (req, res) => {
     }
 
     function renderManualPaymentReviews(items) {
+      latestManualPaymentItems = Array.isArray(items) ? items : [];
       manualPaymentBody.innerHTML = items.length
         ? items.map((item) => {
           const preview = item.screenshotDataUrl
@@ -637,6 +753,44 @@ router.get('/ai-usage', (req, res) => {
             '</tr>';
         }).join('')
         : '<tr><td colspan="6" class="muted">还没有待确认付款记录。</td></tr>';
+    }
+
+    function getFilteredApprovedPayments(items) {
+      const keyword = String(approvedPaymentSearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const searchBase = [
+          item.userKey,
+          item.nickname,
+          item.email,
+          item.phone,
+          item.city,
+          item.amountText,
+          item.paidAtText,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
+    function renderApprovedPaymentReviews(items) {
+      latestApprovedPaymentItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredApprovedPayments(latestApprovedPaymentItems);
+      approvedPaymentBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const preview = item.screenshotDataUrl
+            ? '<a href="' + item.screenshotDataUrl + '" target="_blank" rel="noreferrer"><img src="' + item.screenshotDataUrl + '" alt="付款凭证" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid rgba(117,170,160,0.18);" /></a>'
+            : '<span class="muted">未上传截图</span>';
+
+          return '<tr>' +
+            '<td class="muted">' + (item.reviewedAt || item.createdAt || '--') + '</td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div><div class="muted">' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
+            '<td><div><strong>' + (item.selectedPlan === 'annual' ? '年度会员' : '月度会员') + '</strong></div><div class="muted">' + (item.paymentMethod === 'wechat' ? '微信收款码' : '支付宝收款码') + '</div><div class="muted">已开通</div></td>' +
+            '<td><div>金额：' + (item.amountText || '未填') + '</div><div class="muted">付款时间：' + (item.paidAtText || '未填') + '</div></td>' +
+            '<td>' + preview + '</td>' +
+            '<td><div class="muted">' + (item.reviewedNotes || item.notes || '无备注') + '</div></td>' +
+            '</tr>';
+        }).join('')
+        : '<tr><td colspan="6" class="muted">还没有已开通付款记录。</td></tr>';
     }
 
     function renderStorage(storage) {
@@ -663,13 +817,14 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, storage, leads, manualPayments] = await Promise.all([
+        const [usage, memberships, memories, storage, leads, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships'),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
           requestJson('/admin/api/manual-payment-reviews?status=pending'),
+          requestJson('/admin/api/manual-payment-reviews?status=approved'),
         ]);
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
@@ -677,6 +832,7 @@ router.get('/ai-usage', (req, res) => {
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
         renderManualPaymentReviews(manualPayments.items || []);
+        renderApprovedPaymentReviews(approvedManualPayments.items || []);
         topStatus.textContent = '已刷新。';
       } catch (error) {
         topStatus.textContent = '刷新失败：' + error.message;
@@ -754,8 +910,11 @@ router.get('/ai-usage', (req, res) => {
     document.getElementById('saveBtn').addEventListener('click', saveMembership);
     document.getElementById('saveQuotaBtn').addEventListener('click', saveExtraQuota);
     document.getElementById('loadMemoryBtn').addEventListener('click', loadMemberMemory);
+    membershipSearch.addEventListener('input', () => renderMemberships(latestMembershipItems));
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
+    memorySearch.addEventListener('input', () => renderMemoryList(latestMemoryItems));
+    approvedPaymentSearch.addEventListener('input', () => renderApprovedPaymentReviews(latestApprovedPaymentItems));
     document.addEventListener('click', (event) => {
       const reviewId = event.target?.getAttribute?.('data-approve-review');
       if (reviewId) {
