@@ -431,7 +431,7 @@ function listUsageOverview({ dateKey = getTodayKey(), limit = 100 } = {}) {
   });
 }
 
-function listMemberships({ limit = 200 } = {}) {
+function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
   const normalizedLimit = Math.max(1, Math.min(Number(limit || 200), 500));
   return db.prepare(`
     SELECT
@@ -446,13 +446,27 @@ function listMemberships({ limit = 200 } = {}) {
       profile.gender AS gender,
       profile.city AS city,
       profile.role_text AS role_text,
-      profile.focus_text AS focus_text
+      profile.focus_text AS focus_text,
+      (
+        SELECT usage_today.count
+        FROM ai_usage AS usage_today
+        WHERE usage_today.user_key = membership.user_key
+          AND usage_today.date_key = ?
+        LIMIT 1
+      ) AS used_today,
+      (
+        SELECT usage_last.updated_at
+        FROM ai_usage AS usage_last
+        WHERE usage_last.user_key = membership.user_key
+        ORDER BY usage_last.updated_at DESC
+        LIMIT 1
+      ) AS last_used_at
     FROM user_memberships AS membership
     LEFT JOIN user_profiles AS profile
       ON profile.user_key = membership.user_key
     ORDER BY membership.updated_at DESC
     LIMIT ?
-  `).all(normalizedLimit).map((row) => ({
+  `).all(dateKey, normalizedLimit).map((row) => ({
     userKey: row.user_key,
     birthText: row.birth_text || '',
     nickname: row.nickname || '',
@@ -460,6 +474,8 @@ function listMemberships({ limit = 200 } = {}) {
     city: row.city || '',
     roleText: row.role_text || '',
     focusText: row.focus_text || '',
+    usedToday: Number(row.used_today || 0),
+    lastUsedAt: row.last_used_at || '',
     ...normalizeMembership(row),
     updatedAt: row.updated_at,
   }));

@@ -37,7 +37,7 @@ router.get('/api/usage-overview', (req, res) => {
 
 router.get('/api/memberships', (req, res) => {
   try {
-    const items = listMemberships({ limit: req.query?.limit || 200 });
+    const items = listMemberships({ limit: req.query?.limit || 200, dateKey: req.query?.dateKey });
     res.locals.outputLength = JSON.stringify(items).length;
     return res.json(ok({ items }));
   } catch (error) {
@@ -361,6 +361,7 @@ router.get('/ai-usage', (req, res) => {
             <tr>
               <th>用户</th>
               <th>档位</th>
+              <th>使用记录</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
@@ -685,15 +686,16 @@ router.get('/ai-usage', (req, res) => {
           const summaryRow = '<tr>' +
             '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
             '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
+            '<td><div>今日已用：' + (item.usedToday || 0) + ' 次</div><div class="muted">最近使用：' + (item.lastUsedAt || '--') + '</div></td>' +
             '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
             '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '收起资料' : '展开资料') + '</button></td>' +
             '</tr>';
           const detailRow = isExpanded
-            ? '<tr><td colspan="4" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>注册资料：</strong>' + (related.email || '未留邮箱') + ' / ' + (related.phone || '未留手机号') + ' / ' + (related.city || '未留城市') + '</div><div class="muted"><strong>角色与关注：</strong>' + (item.roleText || '未留角色') + ' / ' + (item.focusText || '未留关注方向') + '</div><div class="muted"><strong>服务备注：</strong>' + (item.notes || '无备注') + '</div></div></td></tr>'
+            ? '<tr><td colspan="5" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>注册资料：</strong>' + (related.email || '未留邮箱') + ' / ' + (related.phone || '未留手机号') + ' / ' + (related.city || '未留城市') + '</div><div class="muted"><strong>角色与关注：</strong>' + (item.roleText || '未留角色') + ' / ' + (item.focusText || '未留关注方向') + '</div><div class="muted"><strong>服务备注：</strong>' + (item.notes || '无备注') + '</div></div></td></tr>'
             : '';
           return summaryRow + detailRow;
         }).join('')
-        : '<tr><td colspan="4" class="muted">还没有符合条件的会员记录。</td></tr>';
+        : '<tr><td colspan="5" class="muted">还没有符合条件的会员记录。</td></tr>';
     }
 
     function getMemoryRelatedProfile(item) {
@@ -942,7 +944,7 @@ router.get('/ai-usage', (req, res) => {
       try {
         const [usage, memberships, memories, storage, leads, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
-          requestJson('/admin/api/memberships'),
+          requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
