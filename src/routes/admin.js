@@ -261,6 +261,10 @@ router.get('/ai-usage', (req, res) => {
     .pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
     .premium { background: rgba(244, 210, 137, 0.24); color: #8a6412; }
     .free { background: rgba(118, 177, 167, 0.16); color: #2c6d66; }
+    .tag-active { background: rgba(110, 207, 192, 0.20); color: #21695f; }
+    .tag-expiring { background: rgba(255, 214, 153, 0.34); color: #8b5a00; }
+    .tag-idle { background: rgba(214, 220, 230, 0.55); color: #52606d; }
+    .tag-other { background: rgba(213, 227, 250, 0.55); color: #34537a; }
     .muted { color: #66807c; }
     .form { display: grid; gap: 12px; }
     .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
@@ -355,6 +359,13 @@ router.get('/ai-usage', (req, res) => {
         <h2 style="margin-top:20px;">会员列表</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
           <input id="membershipSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号 / 城市" />
+          <select id="membershipGroupFilter">
+            <option value="all">全部会员</option>
+            <option value="expiring">只看快到期</option>
+            <option value="active">只看最近活跃</option>
+            <option value="idle">只看长期未使用</option>
+            <option value="other">只看其他会员</option>
+          </select>
         </div>
         <table>
           <thead>
@@ -475,6 +486,7 @@ router.get('/ai-usage', (req, res) => {
     const usageBody = document.getElementById('usageBody');
     const membershipBody = document.getElementById('membershipBody');
     const membershipSearch = document.getElementById('membershipSearch');
+    const membershipGroupFilter = document.getElementById('membershipGroupFilter');
     const memoryBody = document.getElementById('memoryBody');
     const memorySearch = document.getElementById('memorySearch');
     const leadBody = document.getElementById('leadBody');
@@ -674,28 +686,94 @@ router.get('/ai-usage', (req, res) => {
       });
     }
 
+    function isSoonExpiring(item) {
+      if (!item?.expiresAt || item?.status !== 'active') return false;
+      const expiresAt = new Date(item.expiresAt);
+      if (Number.isNaN(expiresAt.getTime())) return false;
+      const diffMs = expiresAt.getTime() - Date.now();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 7;
+    }
+
+    function isLongIdle(item) {
+      if (!item?.lastUsedAt) return true;
+      const lastUsedAt = new Date(item.lastUsedAt.replace(' ', 'T'));
+      if (Number.isNaN(lastUsedAt.getTime())) return true;
+      const diffDays = (Date.now() - lastUsedAt.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays >= 14;
+    }
+
+    function getMembershipGroupKey(item) {
+      if (isSoonExpiring(item)) return 'expiring';
+      if (Number(item?.usedLast7Days || 0) > 0) return 'active';
+      if (isLongIdle(item)) return 'idle';
+      return 'other';
+    }
+
+    function getMembershipGroupMeta(groupKey) {
+      return {
+        active: { title: '最近活跃', hint: '最近 7 天内有使用记录，适合继续追聊和转介绍。', className: 'tag-active' },
+        expiring: { title: '快到期', hint: '未来 7 天内会员到期，适合提前提醒续费。', className: 'tag-expiring' },
+        idle: { title: '长期未使用', hint: '14 天以上未使用，适合人工回访或提醒激活。', className: 'tag-idle' },
+        other: { title: '其他会员', hint: '当前既不活跃、也未临近到期的会员。', className: 'tag-other' },
+      }[groupKey] || { title: '会员', hint: '', className: 'tag-other' };
+    }
+
+    function buildMembershipRows(items) {
+      return items.map((item) => {
+        const related = getMembershipRelatedProfile(item);
+        const tierText = item.tier === 'premium' ? '会员' : '免费';
+        const statusText = item.status === 'active' ? '生效中' : '未生效';
+        const isExpanded = Boolean(expandedMembershipRows[item.userKey]);
+        const summaryRow = '<tr>' +
+          '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
+          '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
+          '<td><div>最近7天：' + (item.usedLast7Days || 0) + ' 次</div><div class="muted">今日：' + (item.usedToday || 0) + ' 次</div><div class="muted">最近使用：' + (item.lastUsedAt || '--') + '</div></td>' +
+          '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
+          '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '收起资料' : '展开资料') + '</button></td>' +
+          '</tr>';
+        const detailRow = isExpanded
+          ? '<tr><td colspan="5" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>注册资料：</strong>' + (related.email || '未留邮箱') + ' / ' + (related.phone || '未留手机号') + ' / ' + (related.city || '未留城市') + '</div><div class="muted"><strong>角色与关注：</strong>' + (item.roleText || '未留角色') + ' / ' + (item.focusText || '未留关注方向') + '</div><div class="muted"><strong>服务备注：</strong>' + (item.notes || '无备注') + '</div></div></td></tr>'
+          : '';
+        return summaryRow + detailRow;
+      }).join('');
+    }
+
     function renderMemberships(items) {
       latestMembershipItems = Array.isArray(items) ? items : [];
       const filteredItems = getFilteredMemberships(latestMembershipItems);
-      membershipBody.innerHTML = filteredItems.length
-        ? filteredItems.map((item) => {
-          const related = getMembershipRelatedProfile(item);
-          const tierText = item.tier === 'premium' ? '会员' : '免费';
-          const statusText = item.status === 'active' ? '生效中' : '未生效';
-          const isExpanded = Boolean(expandedMembershipRows[item.userKey]);
-          const summaryRow = '<tr>' +
-            '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
-            '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
-            '<td><div>最近7天：' + (item.usedLast7Days || 0) + ' 次</div><div class="muted">今日：' + (item.usedToday || 0) + ' 次</div><div class="muted">最近使用：' + (item.lastUsedAt || '--') + '</div></td>' +
-            '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
-            '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '收起资料' : '展开资料') + '</button></td>' +
-            '</tr>';
-          const detailRow = isExpanded
-            ? '<tr><td colspan="5" style="background:rgba(245,251,249,0.9);border-bottom:1px solid rgba(129,166,159,0.20);"><div style="padding:10px 4px 2px; display:grid; gap:6px;"><div><strong>注册资料：</strong>' + (related.email || '未留邮箱') + ' / ' + (related.phone || '未留手机号') + ' / ' + (related.city || '未留城市') + '</div><div class="muted"><strong>角色与关注：</strong>' + (item.roleText || '未留角色') + ' / ' + (item.focusText || '未留关注方向') + '</div><div class="muted"><strong>服务备注：</strong>' + (item.notes || '无备注') + '</div></div></td></tr>'
-            : '';
-          return summaryRow + detailRow;
-        }).join('')
-        : '<tr><td colspan="5" class="muted">还没有符合条件的会员记录。</td></tr>';
+      if (!filteredItems.length) {
+        membershipBody.innerHTML = '<tr><td colspan="5" class="muted">还没有符合条件的会员记录。</td></tr>';
+        return;
+      }
+
+      const groupedItems = {
+        active: [],
+        expiring: [],
+        idle: [],
+        other: [],
+      };
+      filteredItems.forEach((item) => {
+        groupedItems[getMembershipGroupKey(item)].push(item);
+      });
+
+      const selectedGroup = String(membershipGroupFilter?.value || 'all');
+      const groupOrder = selectedGroup === 'all'
+        ? ['active', 'expiring', 'idle', 'other']
+        : [selectedGroup];
+
+      const sectionRows = groupOrder
+        .map((groupKey) => {
+          const groupItems = groupedItems[groupKey] || [];
+          if (!groupItems.length) return '';
+          const meta = getMembershipGroupMeta(groupKey);
+          const header = '<tr><td colspan="5" style="background:rgba(233,246,242,0.92);border-top:1px solid rgba(129,166,159,0.20);border-bottom:1px solid rgba(129,166,159,0.20);padding:12px 8px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><div style="font-weight:800;color:#214d47;">' + meta.title + '</div><span class="pill ' + meta.className + '">人数 ' + groupItems.length + '</span></div><div class="muted" style="margin-top:4px;">' + meta.hint + '</div></td></tr>';
+          return header + buildMembershipRows(groupItems);
+        })
+        .filter(Boolean)
+        .join('');
+
+      membershipBody.innerHTML = sectionRows || '<tr><td colspan="5" class="muted">当前筛选下没有会员记录。</td></tr>';
     }
 
     function getMemoryRelatedProfile(item) {
@@ -1037,6 +1115,7 @@ router.get('/ai-usage', (req, res) => {
     document.getElementById('saveQuotaBtn').addEventListener('click', saveExtraQuota);
     document.getElementById('loadMemoryBtn').addEventListener('click', loadMemberMemory);
     membershipSearch.addEventListener('input', () => renderMemberships(latestMembershipItems));
+    membershipGroupFilter.addEventListener('change', () => renderMemberships(latestMembershipItems));
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     memorySearch.addEventListener('input', () => renderMemoryList(latestMemoryItems));
