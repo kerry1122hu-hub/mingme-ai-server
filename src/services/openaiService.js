@@ -347,8 +347,32 @@ function getPillarLabel(pillar) {
   );
 }
 
+function getPillarsFromFormattedChart(chart) {
+  const raw = [
+    textOf(chart?.formatted?.ganzhi),
+    textOf(chart?.formatted?.pillarsTable),
+    textOf(chart?.ganzhi),
+    textOf(chart?.bazi),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  if (!raw) return null;
+  const matches = raw.match(/[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]/g) || [];
+  if (matches.length < 4) return null;
+  return {
+    year: matches[0],
+    month: matches[1],
+    day: matches[2],
+    hour: matches[3],
+  };
+}
+
 function getChartPillarText(chart, key) {
-  return getPillarLabel(chart?.pillars?.[key]) || '未明确';
+  const explicit = getPillarLabel(chart?.pillars?.[key]);
+  if (explicit) return explicit;
+  const formatted = getPillarsFromFormattedChart(chart);
+  return textOf(formatted?.[key], '未明确');
 }
 
 function getTodayPillar(chart) {
@@ -474,7 +498,7 @@ function detectDeterministicIntent(text = '') {
   if (/(当前流年|今年流年|流年是什么|今年是什么年运|流年呢)/.test(value)) return 'liunian';
   if (/(生肖|属相)/.test(value)) return 'zodiac';
   if (/(纳音)/.test(value)) return 'nayin';
-  if (/(我是什么八字|我的八字是什么|八字是什么|我的四柱是什么|四柱是什么|八字盘是什么|八字结构是什么)/.test(value)) return 'four_pillars';
+  if (/(我是什么八字|我的八字是什么|八字是什么|我的四柱是什么|我的四柱八字是什么|四柱是什么|四柱八字是什么|八字盘是什么|八字结构是什么)/.test(value)) return 'four_pillars';
   if (/(我的干支是什么|我的八字干支是什么|天干地支是什么|干支是什么)/.test(value)) return 'ganzhi';
   if (/(十神结构|我的十神|四柱十神|十神是什么)/.test(value)) return 'ten_gods';
   if (/(藏干|地支藏干|四柱藏干)/.test(value)) return 'hidden_stems';
