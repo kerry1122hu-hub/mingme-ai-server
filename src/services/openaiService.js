@@ -328,15 +328,35 @@ function getStrengthScore(chart) {
 }
 
 function getDayMasterLabel(chart) {
-  return `${textOf(chart?.dayGan, '--')}${textOf(chart?.dayWuXing)}`;
+  return (
+    textOf(chart?.dayMaster) ||
+    `${textOf(chart?.dayGan)}${textOf(chart?.dayWuXing)}` ||
+    `${textOf(chart?.pillars?.day?.stem)}${textOf(chart?.pillars?.day?.wuXingS)}` ||
+    '未明确'
+  );
+}
+
+function getPillarLabel(pillar) {
+  if (!pillar) return '';
+  return (
+    textOf(pillar?.name) ||
+    textOf(pillar?.ganZhi) ||
+    textOf(pillar?.ganzhi) ||
+    `${textOf(pillar?.gan)}${textOf(pillar?.zhi)}` ||
+    `${textOf(pillar?.stem)}${textOf(pillar?.branch)}`
+  );
+}
+
+function getChartPillarText(chart, key) {
+  return getPillarLabel(chart?.pillars?.[key]) || '未明确';
 }
 
 function getTodayPillar(chart) {
-  return `${textOf(chart?.todayPillar?.gan)}${textOf(chart?.todayPillar?.zhi)}`;
+  return getPillarLabel(chart?.todayPillar);
 }
 
 function getLiunianPillar(chart) {
-  return `${textOf(chart?.liuNianPillar?.gan)}${textOf(chart?.liuNianPillar?.zhi)}`;
+  return getPillarLabel(chart?.liuNianPillar);
 }
 
 function getBirthYearFromChart(chart) {
@@ -495,8 +515,7 @@ function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false
   const nextDayunAgeRange = getNextDayunAgeRange(chart);
   const liunian = getLiunianPillar(chart) || getLiunianTheme(chart) || '未明确';
   const useGod = getPrimaryUseGod(chart);
-  const pillars = chart?.pillars || {};
-  const formatPillar = (key) => `${textOf(pillars?.[key]?.gan)}${textOf(pillars?.[key]?.zhi)}` || '未明确';
+  const formatPillar = (key) => getChartPillarText(chart, key);
   const fourPillarsText = `年柱${formatPillar('year')}、月柱${formatPillar('month')}、日柱${formatPillar('day')}、时柱${formatPillar('hour')}`;
   const pillarTenGodText = getPillarTenGodSummary(chart);
   const hiddenStemText = getHiddenStemSummary(chart);
@@ -1105,7 +1124,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
     '以下是这位用户当前对话可参考的背景，只用于帮助你理解，不要照着复述。',
     `- 当前话题类型：${topicType}`,
     `- 当前问题焦点：${topicFocus}`,
-    `- 四柱：${textOf(chart?.pillars?.year?.gan)}${textOf(chart?.pillars?.year?.zhi)} / ${textOf(chart?.pillars?.month?.gan)}${textOf(chart?.pillars?.month?.zhi)} / ${textOf(chart?.pillars?.day?.gan)}${textOf(chart?.pillars?.day?.zhi)} / ${textOf(chart?.pillars?.hour?.gan)}${textOf(chart?.pillars?.hour?.zhi)}`,
+    `- 四柱：${getChartPillarText(chart, 'year')} / ${getChartPillarText(chart, 'month')} / ${getChartPillarText(chart, 'day')} / ${getChartPillarText(chart, 'hour')}`,
     `- 日主：${getDayMasterLabel(chart)} | 日元状态：${getStrengthLevel(chart)}（${getStrengthScore(chart)}分）`,
     `- 纳音：${getNaYin(chart)} | 生肖：${getShengXiao(chart)} | 贵人：${getGuiRen(chart)}`,
     `- 五行分布：${getWxCountText(chart)}`,
