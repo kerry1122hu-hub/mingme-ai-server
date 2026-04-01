@@ -454,6 +454,12 @@ function detectDeterministicIntent(text = '') {
   if (/(当前流年|今年流年|流年是什么|今年是什么年运|流年呢)/.test(value)) return 'liunian';
   if (/(生肖|属相)/.test(value)) return 'zodiac';
   if (/(纳音)/.test(value)) return 'nayin';
+  if (/(我是什么八字|我的八字是什么|八字是什么|我的四柱是什么|四柱是什么|八字盘是什么|八字结构是什么)/.test(value)) return 'four_pillars';
+  if (/(我的干支是什么|我的八字干支是什么|天干地支是什么|干支是什么)/.test(value)) return 'ganzhi';
+  if (/(十神结构|我的十神|四柱十神|十神是什么)/.test(value)) return 'ten_gods';
+  if (/(藏干|地支藏干|四柱藏干)/.test(value)) return 'hidden_stems';
+  if (/(神煞|有哪些神煞|我的神煞)/.test(value)) return 'shen_sha';
+  if (/(冲合刑害|合冲|冲合|刑害|有没有冲|有没有合|盘里有什么冲合)/.test(value)) return 'structure_relations';
   if (/(月令|当令|司令)/.test(value)) return 'month_command';
   if (/(日柱|日支|日干)/.test(value)) return 'day_pillar';
   if (/(月柱)/.test(value)) return 'month_pillar';
@@ -491,6 +497,18 @@ function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false
   const useGod = getPrimaryUseGod(chart);
   const pillars = chart?.pillars || {};
   const formatPillar = (key) => `${textOf(pillars?.[key]?.gan)}${textOf(pillars?.[key]?.zhi)}` || '未明确';
+  const fourPillarsText = `年柱${formatPillar('year')}、月柱${formatPillar('month')}、日柱${formatPillar('day')}、时柱${formatPillar('hour')}`;
+  const pillarTenGodText = getPillarTenGodSummary(chart);
+  const hiddenStemText = getHiddenStemSummary(chart);
+  const shenShaText = getShenShaSummary(chart);
+  const structureText = getStructureSummary(chart);
+  const dayMasterText = getDayMasterLabel(chart);
+  const composeChartReply = (conclusion, structure, reminder) => {
+    const lead = isCorrection ? `重校后看，${conclusion}` : conclusion;
+    return [lead, structure ? `这层结构看的是：${structure}` : '', reminder ? `现实提醒：${reminder}` : '']
+      .filter(Boolean)
+      .join('');
+  };
 
   const replies = {
     current_dayun: isCorrection
@@ -504,6 +522,36 @@ function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false
       : `你今年的流年是${liunian}。`,
     zodiac: isCorrection ? `重校后看，你的生肖是${getShengXiao(chart)}。` : `你的生肖是${getShengXiao(chart)}。`,
     nayin: isCorrection ? `重校后看，你的纳音是${getNaYin(chart)}。` : `你的纳音是${getNaYin(chart)}。`,
+    four_pillars: composeChartReply(
+      `你的八字四柱是：${fourPillarsText}。`,
+      '年柱偏外层背景，月柱偏现实节奏，日柱偏你自己，时柱偏后段走向，四柱合起来才是整张盘的骨架。',
+      '看盘别只盯一柱，真正有效的是把四柱放回同一张命盘里一起判断。'
+    ),
+    ganzhi: composeChartReply(
+      `你的天干地支是：${fourPillarsText}。`,
+      '天干更偏外显与表达，地支更偏底层根气与持续作用，所以很多表面反应和内里节奏并不是同一层。',
+      '若只看天干容易飘，若只看地支又容易闷，合起来看才像真盘。'
+    ),
+    ten_gods: composeChartReply(
+      `你的十神结构是：${pillarTenGodText || '当前结果里未单独展开'}。`,
+      '十神讲的是你这张盘靠什么发力、又容易被什么牵制，本质上是在看行为驱动力和应事方式。',
+      '现实里别把十神当标签，更要看哪股力量是你顺手的，哪股力量是你容易失衡的。'
+    ),
+    hidden_stems: composeChartReply(
+      `你的地支藏干是：${hiddenStemText || '当前结果里未单独展开'}。`,
+      '藏干属于盘里的暗线，很多表面没说出口、却一直在起作用的底层力量，往往都埋在这里。',
+      '现实里你会觉得“怎么总卡在同一种感觉里”，很多时候就要回到藏干这层去看。'
+    ),
+    shen_sha: composeChartReply(
+      `你这张盘当前可见的神煞线索有：${shenShaText || '当前结果里未单独展开'}。`,
+      '神煞更像补充线索，用来提示机会、关系、奔波或放大点，不该压过整张盘的旺衰和结构主轴。',
+      '看神煞要点到为止，把它当提醒，不要把它当唯一结论。'
+    ),
+    structure_relations: composeChartReply(
+      `你这张盘当前最明显的冲合刑害是：${structureText || '当前结果里未单独展开'}。`,
+      `这一层看的是盘里哪些位置在牵引、碰撞或拧着走。合多偏整合，冲多偏变化，刑多偏卡点，要结合日主${dayMasterText}一起看才准。`,
+      '现实里遇到反复、拉扯和节奏失衡时，往往就能在这层找到根子。'
+    ),
     month_command: isCorrection ? `重校后看，你这张盘的月令在${formatPillar('month')}。` : `你的月令在${formatPillar('month')}。`,
     day_pillar: isCorrection ? `重校后看，你的日柱是${formatPillar('day')}。` : `你的日柱是${formatPillar('day')}。`,
     month_pillar: isCorrection ? `重校后看，你的月柱是${formatPillar('month')}。` : `你的月柱是${formatPillar('month')}。`,
@@ -636,6 +684,81 @@ function getTenGodSummary(chart) {
   }
 
   return pieces.join('；') || '未提供明确十神重点';
+}
+
+function getPillarDetail(chart, key) {
+  return chart?.pillarDetails?.[key] || chart?.pillarDetail?.[key] || {};
+}
+
+function getPillarTenGodSummary(chart) {
+  return [
+    ['年柱', 'year'],
+    ['月柱', 'month'],
+    ['日柱', 'day'],
+    ['时柱', 'hour'],
+  ]
+    .map(([label, key]) => {
+      const detail = getPillarDetail(chart, key);
+      const explicit = textOf(chart?.shiShen?.[key]) || textOf(chart?.tenGods?.[key]) || textOf(detail?.stemTenGod);
+      const branchGods = toList(detail?.branchTenGods).slice(0, 3);
+      const summary = [explicit, branchGods.length ? `支神${branchGods.join('、')}` : ''].filter(Boolean).join(' / ');
+      return summary ? `${label}${summary}` : '';
+    })
+    .filter(Boolean)
+    .join('；');
+}
+
+function getHiddenStemSummary(chart) {
+  return [
+    ['年', 'year'],
+    ['月', 'month'],
+    ['日', 'day'],
+    ['时', 'hour'],
+  ]
+    .map(([label, key]) => {
+      const detail = getPillarDetail(chart, key);
+      const stems = toList(detail?.hiddenStems || detail?.cangGan);
+      const gods = toList(detail?.hiddenStemTenGods || detail?.hiddenTenGods);
+      if (!stems.length) return '';
+      return `${label}柱${stems.map((stem, index) => (textOf(gods[index]) ? `${stem}(${gods[index]})` : stem)).join('、')}`;
+    })
+    .filter(Boolean)
+    .join('；');
+}
+
+function getShenShaSummary(chart) {
+  const details = chart?.shenShaDetails || {};
+  const parts = [
+    ['年柱', 'year'],
+    ['月柱', 'month'],
+    ['日柱', 'day'],
+    ['时柱', 'hour'],
+  ]
+    .map(([label, key]) => {
+      const items = toList(details?.[key]).slice(0, 5);
+      return items.length ? `${label}${items.join('、')}` : '';
+    })
+    .filter(Boolean);
+  const extras = [...toList(chart?.guiRen), ...toList(chart?.wenChang), ...toList(chart?.yiMa)].filter(Boolean);
+  if (extras.length) parts.unshift(`补充神煞${Array.from(new Set(extras)).slice(0, 6).join('、')}`);
+  return parts.join('；');
+}
+
+function getStructureSummary(chart) {
+  const items = Array.isArray(chart?.structureObservations)
+    ? chart.structureObservations
+    : Array.isArray(chart?.structureObservation)
+      ? chart.structureObservation
+      : [];
+  return items
+    .slice(0, 8)
+    .map((item) => {
+      const name = textOf(item?.name) || textOf(item?.title) || textOf(item?.label) || textOf(item?.type);
+      const effect = textOf(item?.effect) || textOf(item?.summary) || textOf(item?.conclusion) || textOf(item?.body);
+      return name ? `${name}${effect ? `：${effect}` : ''}` : '';
+    })
+    .filter(Boolean)
+    .join('；');
 }
 
 function detectTopicType(userInput = '') {
@@ -999,6 +1122,10 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
     `- 当前阶段主线：${getDayunTheme(chart)}`,
     `- 当前年度主题：${getLiunianTheme(chart)}`,
     `- 十神重点：${getTenGodSummary(chart) || '未提供'}`,
+    `- 柱位十神：${getPillarTenGodSummary(chart) || '未单独展开'}`,
+    `- 地支藏干：${getHiddenStemSummary(chart) || '未单独展开'}`,
+    `- 神煞线索：${getShenShaSummary(chart) || '未单独展开'}`,
+    `- 冲合刑害：${getStructureSummary(chart) || '未单独展开'}`,
     '- 灵性与助运判断：若用户问风水、开运、刺符、护身、招财、贵人、泰国经文符等，不要只当成泛财运问题，要判断其诉求更偏护身、聚财、贵人、定心、提势，还是执行力。',
     '- 小众经文符线索：若提到泰国经文符、刺符、宝袋、莲花经、帝王龙、左右手或前后背搭配，要从“立势、护运、起势、收局、聚财、稳心”的结构来解释。',
     '- 解释要求：可以直接使用四柱八字、五行生克、十神、大运流年等术语，但每次都要顺手翻译成现代语，让用户明白这和当前的压力、关系、节奏、选择、行动有什么关系。',
