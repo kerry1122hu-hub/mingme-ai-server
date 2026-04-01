@@ -347,6 +347,27 @@ function getPillarLabel(pillar) {
   );
 }
 
+function getPillarKeyIndex(key) {
+  return {
+    year: 0,
+    month: 1,
+    day: 2,
+    hour: 3,
+  }[key];
+}
+
+function getPillarByKey(chart, key) {
+  const direct = chart?.pillars?.[key];
+  if (direct) return direct;
+
+  if (Array.isArray(chart?.pillars)) {
+    const index = getPillarKeyIndex(key);
+    if (typeof index === 'number') return chart.pillars[index] || null;
+  }
+
+  return null;
+}
+
 function getPillarsFromFormattedChart(chart) {
   const raw = [
     textOf(chart?.formatted?.ganzhi),
@@ -369,7 +390,7 @@ function getPillarsFromFormattedChart(chart) {
 }
 
 function getChartPillarText(chart, key) {
-  const explicit = getPillarLabel(chart?.pillars?.[key]);
+  const explicit = getPillarLabel(getPillarByKey(chart, key));
   if (explicit) return explicit;
   const formatted = getPillarsFromFormattedChart(chart);
   return textOf(formatted?.[key], '未明确');
