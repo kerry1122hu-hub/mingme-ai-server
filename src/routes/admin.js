@@ -686,7 +686,7 @@ router.get('/ai-usage', (req, res) => {
           const summaryRow = '<tr>' +
             '<td><div><strong>' + (related.nickname || '未留昵称') + '</strong></div><div class="mono">' + item.userKey + '</div><div class="muted">' + [item.birthText, item.gender, related.city].filter(Boolean).join(' / ') + '</div></td>' +
             '<td>' + tierText + (item.expiresAt ? '<div class="muted">到期：' + item.expiresAt + '</div>' : '') + '</td>' +
-            '<td><div>今日已用：' + (item.usedToday || 0) + ' 次</div><div class="muted">最近使用：' + (item.lastUsedAt || '--') + '</div></td>' +
+            '<td><div>最近7天：' + (item.usedLast7Days || 0) + ' 次</div><div class="muted">今日：' + (item.usedToday || 0) + ' 次</div><div class="muted">最近使用：' + (item.lastUsedAt || '--') + '</div></td>' +
             '<td>' + statusText + '<div class="muted">更新：' + (item.updatedAt || '--') + '</div></td>' +
             '<td><button data-toggle-membership="' + item.userKey + '" style="background:rgba(255,255,255,0.94);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">' + (isExpanded ? '收起资料' : '展开资料') + '</button></td>' +
             '</tr>';

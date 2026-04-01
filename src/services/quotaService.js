@@ -128,6 +128,13 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function shiftDateKey(dateKey, offsetDays) {
+  const base = new Date(`${dateKey}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) return dateKey;
+  base.setUTCDate(base.getUTCDate() + Number(offsetDays || 0));
+  return base.toISOString().slice(0, 10);
+}
+
 function pad(value) {
   return String(value || '').padStart(2, '0');
 }
@@ -433,6 +440,7 @@ function listUsageOverview({ dateKey = getTodayKey(), limit = 100 } = {}) {
 
 function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
   const normalizedLimit = Math.max(1, Math.min(Number(limit || 200), 500));
+  const last7From = shiftDateKey(dateKey, -6);
   return db.prepare(`
     SELECT
       membership.user_key AS user_key,
@@ -455,6 +463,12 @@ function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
         LIMIT 1
       ) AS used_today,
       (
+        SELECT COALESCE(SUM(usage_recent.count), 0)
+        FROM ai_usage AS usage_recent
+        WHERE usage_recent.user_key = membership.user_key
+          AND usage_recent.date_key BETWEEN ? AND ?
+      ) AS used_last_7_days,
+      (
         SELECT usage_last.updated_at
         FROM ai_usage AS usage_last
         WHERE usage_last.user_key = membership.user_key
@@ -466,7 +480,7 @@ function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
       ON profile.user_key = membership.user_key
     ORDER BY membership.updated_at DESC
     LIMIT ?
-  `).all(dateKey, normalizedLimit).map((row) => ({
+  `).all(dateKey, last7From, dateKey, normalizedLimit).map((row) => ({
     userKey: row.user_key,
     birthText: row.birth_text || '',
     nickname: row.nickname || '',
@@ -475,6 +489,7 @@ function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
     roleText: row.role_text || '',
     focusText: row.focus_text || '',
     usedToday: Number(row.used_today || 0),
+    usedLast7Days: Number(row.used_last_7_days || 0),
     lastUsedAt: row.last_used_at || '',
     ...normalizeMembership(row),
     updatedAt: row.updated_at,
