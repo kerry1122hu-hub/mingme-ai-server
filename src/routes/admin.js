@@ -16,6 +16,7 @@ const { listAnalyticsEvents } = require('../services/analyticsService');
 const { listPaywallLeads } = require('../services/paywallLeadService');
 const { listManualPaymentReviews, approveManualPaymentReview } = require('../services/manualPaymentService');
 const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
+const { listContactMessages } = require('../services/contactMessageService');
 const { requireAdminToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -93,6 +94,17 @@ router.get('/api/analytics-events', (req, res) => {
 router.get('/api/paywall-leads', (req, res) => {
   try {
     const items = listPaywallLeads({ limit: req.query?.limit || 100 });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/contact-messages', (req, res) => {
+  try {
+    const items = listContactMessages({ limit: req.query?.limit || 100 });
     res.locals.outputLength = JSON.stringify(items).length;
     return res.json(ok({ items }));
   } catch (error) {
@@ -446,6 +458,23 @@ router.get('/ai-usage', (req, res) => {
           <tbody id="leadBody"></tbody>
         </table>
 
+        <h2 style="margin-top:20px;">联系明己留言</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="contactMessageSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号 / 留言内容" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>提交时间</th>
+              <th>用户</th>
+              <th>联系方式</th>
+              <th>主题</th>
+              <th>留言内容</th>
+            </tr>
+          </thead>
+          <tbody id="contactMessageBody"></tbody>
+        </table>
+
         <h2 style="margin-top:20px;">待确认付款名单</h2>
         <table>
           <thead>
@@ -490,6 +519,8 @@ router.get('/ai-usage', (req, res) => {
     const memoryBody = document.getElementById('memoryBody');
     const memorySearch = document.getElementById('memorySearch');
     const leadBody = document.getElementById('leadBody');
+    const contactMessageBody = document.getElementById('contactMessageBody');
+    const contactMessageSearch = document.getElementById('contactMessageSearch');
     const manualPaymentBody = document.getElementById('manualPaymentBody');
     const approvedPaymentBody = document.getElementById('approvedPaymentBody');
     const leadRecentValue = document.getElementById('leadRecentValue');
@@ -511,6 +542,7 @@ router.get('/ai-usage', (req, res) => {
     let expandedMembershipRows = {};
     let latestMemoryItems = [];
     let latestLeadItems = [];
+    let latestContactMessageItems = [];
     let latestManualPaymentItems = [];
     let latestApprovedPaymentItems = [];
 
@@ -935,6 +967,39 @@ router.get('/ai-usage', (req, res) => {
         : '<tr><td colspan="5" class="muted">当前筛选条件下还没有新的付费意向。</td></tr>';
     }
 
+    function getFilteredContactMessages(items) {
+      const keyword = String(contactMessageSearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const searchBase = [
+          item.userKey,
+          item.nickname,
+          item.email,
+          item.phone,
+          item.city,
+          item.topic,
+          item.message,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
+    function renderContactMessages(items) {
+      latestContactMessageItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredContactMessages(latestContactMessageItems);
+      contactMessageBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => (
+          '<tr>' +
+            '<td class="muted">' + (item.createdAt || '--') + '</td>' +
+            '<td><div><strong>' + (item.nickname || '未留称呼') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div><div class="muted">' + (item.city || '未留城市') + '</div><div class="muted">' + (item.focus || '未留关注方向') + '</div></td>' +
+            '<td><div>' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
+            '<td>' + (item.topic || '未填写主题') + '</td>' +
+            '<td><div>' + (item.message || '暂无内容') + '</div><div class="muted" style="margin-top:6px;">' + (item.source || 'member_contact') + '</div></td>' +
+          '</tr>'
+        )).join('')
+        : '<tr><td colspan="5" class="muted">还没有联系明己留言。</td></tr>';
+    }
+
     function renderManualPaymentReviews(items) {
       latestManualPaymentItems = Array.isArray(items) ? items : [];
       manualPaymentBody.innerHTML = items.length
@@ -1020,12 +1085,13 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, storage, leads, manualPayments, approvedManualPayments] = await Promise.all([
+        const [usage, memberships, memories, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
+          requestJson('/admin/api/contact-messages'),
           requestJson('/admin/api/manual-payment-reviews?status=pending'),
           requestJson('/admin/api/manual-payment-reviews?status=approved'),
         ]);
@@ -1034,6 +1100,7 @@ router.get('/ai-usage', (req, res) => {
         renderMemoryList(memories.items || []);
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
+        renderContactMessages(contactMessages.items || []);
         renderManualPaymentReviews(manualPayments.items || []);
         renderApprovedPaymentReviews(approvedManualPayments.items || []);
         topStatus.textContent = '已刷新。';
@@ -1118,6 +1185,7 @@ router.get('/ai-usage', (req, res) => {
     membershipGroupFilter.addEventListener('change', () => renderMemberships(latestMembershipItems));
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
+    contactMessageSearch.addEventListener('input', () => renderContactMessages(latestContactMessageItems));
     memorySearch.addEventListener('input', () => renderMemoryList(latestMemoryItems));
     approvedPaymentSearch.addEventListener('input', () => renderApprovedPaymentReviews(latestApprovedPaymentItems));
     document.addEventListener('click', (event) => {

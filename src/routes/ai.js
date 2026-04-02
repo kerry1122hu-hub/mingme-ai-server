@@ -5,6 +5,7 @@ const { getQuotaStatus, consumeQuota, getMembershipStatus } = require('../servic
 const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
+const { saveContactMessage } = require('../services/contactMessageService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -216,6 +217,36 @@ router.post('/manual-payment-review', async (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'save manual payment failed', 'SAVE_MANUAL_PAYMENT_FAILED'));
+  }
+});
+
+router.post('/contact-mingji', async (req, res) => {
+  try {
+    const {
+      registration,
+      topic,
+      message,
+      profile,
+      userKey,
+      chart,
+      source,
+    } = req.body || {};
+
+    const contact = saveContactMessage({
+      registration,
+      topic,
+      message,
+      profile,
+      userKey,
+      chart,
+      source,
+    });
+
+    res.locals.outputLength = JSON.stringify(contact).length;
+    return res.json(ok({ contact }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'save contact failed', 'SAVE_CONTACT_FAILED'));
   }
 });
 
