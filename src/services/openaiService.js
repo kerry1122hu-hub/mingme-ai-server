@@ -1396,26 +1396,47 @@ async function summarizeChatHistory(history = []) {
 
 async function runChat({ userProfile, message, chart, history = [], userKey, profile, memberTier = 'free' }) {
   ensureOpenAIKey();
-  const memberMemory = getMemberMemory({ userKey, chart, memberTier });
+  let memberMemory;
+  try {
+    memberMemory = getMemberMemory({ userKey, chart, memberTier });
+  } catch (error) {
+    console.error('[memory] failed to read member memory:', error);
+    memberMemory = {
+      enabled: false,
+      userKey: userKey || '',
+      userProfile: {},
+      recentSessions: [],
+      longTermPatterns: [],
+      actionTracker: { pendingActions: [], recentActions: [] },
+      profileMemory: {},
+      sessionMemory: {},
+      responsePreference: {},
+      questionHistory: [],
+    };
+  }
   const deterministic = resolveDeterministicIntent(message, history);
   if (deterministic.intent) {
     const directReply = buildDeterministicReply(deterministic.intent, chart, { isCorrection: deterministic.isCorrection });
     if (directReply) {
-      updateMemberMemory({
-        userKey,
-        chart,
-        memberTier,
-        profile,
-        userMessage: message,
-        assistantReply: directReply,
-        route: deriveMemoryWriteback({
-          reply: directReply,
-          topicType: 'core_chart',
-          intentType: deterministic.isCorrection ? 'continue' : 'clarify',
+      try {
+        updateMemberMemory({
+          userKey,
+          chart,
+          memberTier,
+          profile,
+          userMessage: message,
+          assistantReply: directReply,
+          route: deriveMemoryWriteback({
+            reply: directReply,
+            topicType: 'core_chart',
+            intentType: deterministic.isCorrection ? 'continue' : 'clarify',
+            followUpAnchor: '',
+          }),
           followUpAnchor: '',
-        }),
-        followUpAnchor: '',
-      });
+        });
+      } catch (error) {
+        console.error('[memory] failed to write deterministic member memory:', error);
+      }
       return directReply;
     }
   }
@@ -1464,7 +1485,14 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
         content: [
           chatContext,
           compressedContext ? `【近期对话摘要】\n${compressedContext}` : '',
-          buildMemberMemoryContext(memberMemory),
+          (() => {
+            try {
+              return buildMemberMemoryContext(memberMemory);
+            } catch (error) {
+              console.error('[memory] failed to build member memory context:', error);
+              return '';
+            }
+          })(),
           '这些背景只用于理解用户，不要照着复述，也不要重新写一篇完整报告。',
         ].filter(Boolean).join('\n\n'),
       },
@@ -1473,21 +1501,25 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
   });
 
   const sanitized = sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
-  updateMemberMemory({
-    userKey,
-    chart,
-    memberTier,
-    profile,
-    userMessage: message,
-    assistantReply: sanitized,
-    route: deriveMemoryWriteback({
-      reply: sanitized,
-      topicType: companionPrompt.topicType,
-      intentType: companionPrompt.intentType,
+  try {
+    updateMemberMemory({
+      userKey,
+      chart,
+      memberTier,
+      profile,
+      userMessage: message,
+      assistantReply: sanitized,
+      route: deriveMemoryWriteback({
+        reply: sanitized,
+        topicType: companionPrompt.topicType,
+        intentType: companionPrompt.intentType,
+        followUpAnchor: companionPrompt.followUpAnchor,
+      }),
       followUpAnchor: companionPrompt.followUpAnchor,
-    }),
-    followUpAnchor: companionPrompt.followUpAnchor,
-  });
+    });
+  } catch (error) {
+    console.error('[memory] failed to write member memory:', error);
+  }
 
   return sanitized;
 }
