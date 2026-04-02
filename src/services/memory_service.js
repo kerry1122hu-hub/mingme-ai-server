@@ -143,7 +143,63 @@ function ensureMemoryDatabase() {
       ON member_question_memory(user_key, created_at DESC, id DESC);
   `);
 
+  ensureUserProfilesSchema(db);
+
   return db;
+}
+
+function ensureColumn(dbInstance, tableName, columnName, sqlDefinition) {
+  const columns = dbInstance.prepare(`PRAGMA table_info(${tableName})`).all();
+  const exists = columns.some((column) => column.name === columnName);
+  if (!exists) {
+    dbInstance.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${sqlDefinition}`);
+  }
+}
+
+function ensureUserProfilesSchema(dbInstance) {
+  const columns = dbInstance.prepare(`PRAGMA table_info(user_profiles)`).all();
+  const hasLegacyUserKey = columns.some((column) => column.name === 'user_key');
+
+  ensureColumn(dbInstance, 'user_profiles', 'user_id', 'TEXT');
+  ensureColumn(dbInstance, 'user_profiles', 'user_key', 'TEXT');
+  ensureColumn(dbInstance, 'user_profiles', 'birth_solar', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'birth_lunar', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'timezone', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'bazi_summary', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'zodiac_summary', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'decision_style', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'emotion_pattern', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'relationship_pattern', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'money_pattern', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'response_preference', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'long_term_goals', "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(dbInstance, 'user_profiles', 'risk_notes', "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(dbInstance, 'user_profiles', 'created_at', 'TEXT');
+
+  if (hasLegacyUserKey) {
+    dbInstance.exec(`
+      UPDATE user_profiles
+      SET user_id = COALESCE(NULLIF(user_id, ''), user_key)
+      WHERE user_id IS NULL OR user_id = '';
+    `);
+  }
+
+  dbInstance.exec(`
+    UPDATE user_profiles
+    SET user_key = COALESCE(NULLIF(user_key, ''), user_id)
+    WHERE user_key IS NULL OR user_key = '';
+  `);
+
+  dbInstance.exec(`
+    UPDATE user_profiles
+    SET created_at = COALESCE(NULLIF(created_at, ''), updated_at, CURRENT_TIMESTAMP)
+    WHERE created_at IS NULL OR created_at = '';
+  `);
+
+  dbInstance.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profiles_user_id
+    ON user_profiles(user_id);
+  `);
 }
 
 const db = ensureMemoryDatabase();
@@ -433,13 +489,15 @@ function normalizeQuestionRow(row) {
 }
 
 function normalizeUserProfileRow(row) {
+  const longTermGoals = safeJsonParse(row?.long_term_goals || '[]', []);
+  const legacyFocusText = textOf(row?.focus_text);
   return {
-    userId: row?.user_id || '',
+    userId: row?.user_id || row?.user_key || '',
     nickname: row?.nickname || '',
     gender: row?.gender || '',
-    birthSolar: row?.birth_solar || '',
+    birthSolar: row?.birth_solar || row?.birth_text || '',
     birthLunar: row?.birth_lunar || '',
-    timezone: row?.timezone || '',
+    timezone: row?.timezone || 'Australia/Perth',
     baziSummary: row?.bazi_summary || '',
     zodiacSummary: row?.zodiac_summary || '',
     decisionStyle: row?.decision_style || '',
@@ -447,9 +505,12 @@ function normalizeUserProfileRow(row) {
     relationshipPattern: row?.relationship_pattern || '',
     moneyPattern: row?.money_pattern || '',
     responsePreference: row?.response_preference || '',
-    longTermGoals: safeJsonParse(row?.long_term_goals || '[]', []),
+    longTermGoals: uniqStrings([
+      ...(Array.isArray(longTermGoals) ? longTermGoals : []),
+      legacyFocusText,
+    ]),
     riskNotes: row?.risk_notes || '',
-    createdAt: row?.created_at || '',
+    createdAt: row?.created_at || row?.updated_at || '',
     updatedAt: row?.updated_at || '',
   };
 }
@@ -647,14 +708,15 @@ function upsertUserProfile(userId, { profile = {}, chart = {}, preferencePatch =
 
   db.prepare(`
     INSERT INTO user_profiles (
-      user_id, nickname, gender, birth_solar, birth_lunar, timezone,
+      user_id, user_key, nickname, gender, birth_solar, birth_lunar, timezone,
       bazi_summary, zodiac_summary, decision_style, emotion_pattern,
       relationship_pattern, money_pattern, response_preference,
       long_term_goals, risk_notes, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id)
     DO UPDATE SET
+      user_key = COALESCE(NULLIF(user_profiles.user_key, ''), excluded.user_key),
       nickname = COALESCE(NULLIF(excluded.nickname, ''), user_profiles.nickname),
       gender = COALESCE(NULLIF(excluded.gender, ''), user_profiles.gender),
       birth_solar = COALESCE(NULLIF(excluded.birth_solar, ''), user_profiles.birth_solar),
@@ -671,6 +733,7 @@ function upsertUserProfile(userId, { profile = {}, chart = {}, preferencePatch =
       risk_notes = COALESCE(NULLIF(excluded.risk_notes, ''), user_profiles.risk_notes),
       updated_at = CURRENT_TIMESTAMP
   `).run(
+    userId,
     userId,
     textOf(profile.nickname),
     textOf(profile.gender),
