@@ -17,10 +17,80 @@ const { listPaywallLeads } = require('../services/paywallLeadService');
 const { listManualPaymentReviews, approveManualPaymentReview } = require('../services/manualPaymentService');
 const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
 const { listContactMessages } = require('../services/contactMessageService');
-const { requireAdminToken } = require('../utils/auth');
+const {
+  clearAdminSessionCookie,
+  getAdminUsername,
+  isAdminAuthenticated,
+  requireAdminToken,
+  setAdminSessionCookie,
+  validateAdminCredentials,
+} = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
 const router = express.Router();
+
+function renderAdminLoginPage(errorText = '') {
+  const safeError = errorText ? `<div class="error">${errorText}</div>` : '';
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MingMe 后台登录</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle at top, rgba(191,245,234,.82), rgba(234,243,240,.95) 45%, #eef5f3 100%); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18322e; padding: 24px; box-sizing: border-box; }
+    .card { width: min(100%, 420px); background: rgba(255,255,255,.92); border-radius: 24px; border: 1px solid rgba(117, 170, 160, 0.2); box-shadow: 0 18px 42px rgba(24, 50, 46, 0.12); padding: 28px; }
+    h1 { margin: 0 0 10px; font-size: 30px; }
+    .sub { color: #4d6964; line-height: 1.7; margin-bottom: 22px; }
+    .eyebrow { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: rgba(110, 207, 192, 0.18); color: #256b62; font-size: 12px; font-weight: 800; margin-bottom: 14px; }
+    .form { display: grid; gap: 12px; }
+    input { width: 100%; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(112, 150, 143, 0.35); padding: 12px 14px; background: rgba(255,255,255,.96); font-size: 15px; }
+    button { border-radius: 14px; border: 0; padding: 12px 14px; background: linear-gradient(135deg, #6ecfc0, #4aa7a1); color: white; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .hint { margin-top: 16px; color: #66807c; font-size: 13px; line-height: 1.6; }
+    .error { margin-bottom: 14px; border-radius: 14px; padding: 10px 12px; background: rgba(255, 92, 92, 0.08); color: #a13a3a; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">管理入口</div>
+    <h1>MingMe 后台登录</h1>
+    <div class="sub">后台默认处于锁定状态。请输入管理员账号和密码后，才可查看会员、记忆、付款和使用数据。</div>
+    ${safeError}
+    <form class="form" method="post" action="/admin/login">
+      <input name="username" autocomplete="username" placeholder="管理员账号" value="${getAdminUsername()}" />
+      <input name="password" type="password" autocomplete="current-password" placeholder="管理员密码" />
+      <button type="submit">进入管理后台</button>
+    </form>
+    <div class="hint">如果你之后想更换账号密码，请在 Render 的环境变量里设置 <span style="font-family: ui-monospace, SFMono-Regular, Consolas, monospace;">ADMIN_USERNAME</span> 和 <span style="font-family: ui-monospace, SFMono-Regular, Consolas, monospace;">ADMIN_PASSWORD</span>。</div>
+  </div>
+</body>
+</html>`;
+}
+
+router.get('/login', (req, res) => {
+  const alreadyAuthed = !!isAdminAuthenticated(req);
+  if (alreadyAuthed) {
+    return res.redirect('/admin/ai-usage');
+  }
+  const errorText = req.query?.error ? '账号或密码不正确，请重新输入。' : '';
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(renderAdminLoginPage(errorText));
+});
+
+router.post('/login', (req, res) => {
+  const username = `${req.body?.username || ''}`.trim();
+  const password = `${req.body?.password || ''}`;
+  if (!validateAdminCredentials(username, password)) {
+    return res.redirect('/admin/login?error=1');
+  }
+  setAdminSessionCookie(res, username, req);
+  return res.redirect('/admin/ai-usage');
+});
+
+router.post('/logout', (req, res) => {
+  clearAdminSessionCookie(res, req);
+  return res.redirect('/admin/login');
+});
 
 router.use(requireAdminToken);
 
@@ -234,6 +304,7 @@ router.post('/api/set-extra-quota', (req, res) => {
 
 router.get('/ai-usage', (req, res) => {
   const token = encodeURIComponent(req.query?.token || '');
+  const adminName = `${req.adminUser?.username || getAdminUsername()}`.trim();
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(`<!doctype html>
 <html lang="zh-CN">
@@ -248,6 +319,9 @@ router.get('/ai-usage', (req, res) => {
     h1 { margin: 0 0 8px; font-size: 30px; }
     .sub { color: #4d6964; margin-bottom: 20px; line-height: 1.7; }
     .toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .admin-badge { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: rgba(255,255,255,.78); border: 1px solid rgba(117, 170, 160, 0.2); font-size: 13px; color: #315d57; font-weight: 700; }
+    .logout-button { border-radius: 999px; border: 1px solid rgba(117, 170, 160, 0.28); background: rgba(255,255,255,.82); color: #315d57; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
     .toolbar input, .toolbar select, .toolbar button, .form input, .form select, .form textarea { border-radius: 14px; border: 1px solid rgba(112, 150, 143, 0.35); padding: 10px 12px; background: rgba(255,255,255,.88); font-size: 14px; }
     .toolbar button, .form button { background: linear-gradient(135deg, #6ecfc0, #4aa7a1); color: white; border: 0; cursor: pointer; font-weight: 600; }
     .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-top: 20px; }
@@ -296,8 +370,18 @@ router.get('/ai-usage', (req, res) => {
 <body>
   <div class="wrap">
     <div class="hero">
-      <h1>MingMe AI 管理后台</h1>
-      <div class="sub">这里可以查看今日 AI 使用情况、会员状态、额外次数、会员记忆，以及人工付款审核与已开通记录。</div>
+      <div class="hero-top">
+        <div>
+          <h1>MingMe AI 管理后台</h1>
+          <div class="sub">这里可以查看今日 AI 使用情况、会员状态、额外次数、会员记忆，以及人工付款审核与已开通记录。</div>
+        </div>
+        <div style="display:grid; gap:10px; justify-items:end;">
+          <div class="admin-badge">当前管理员：${adminName}</div>
+          <form method="post" action="/admin/logout">
+            <button type="submit" class="logout-button">退出登录</button>
+          </form>
+        </div>
+      </div>
       <div class="toolbar">
         <input id="dateKey" type="date" />
         <button id="reloadBtn">刷新今日数据</button>
