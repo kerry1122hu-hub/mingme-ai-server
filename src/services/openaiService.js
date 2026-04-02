@@ -1216,17 +1216,26 @@ function deriveMemoryWriteback({
 }) {
   const text = textOf(reply);
   const summaryText = text
-    .replace(/^(抚掌而笑|肃然正襟|我看了看你的盘|我先直说|先直说|先说结论)[，、：:\s]*/g, '')
-    .replace(/^(空中显现八字玄机|此刻八字玄机浮现|这张盘一展开|这个地方倒真有点意思)[，、：:\s]*/g, '')
+    .replace(/^(抚掌而笑|肃然正襟|我看了看你的盘|我先直说|先直说|先说结论|整衣冠而向北斗)[，、：:\s]*/g, '')
+    .replace(/^(空中显现八字玄机|此刻八字玄机浮现|这张盘一展开|这个地方倒真有点意思|虚空浮现你八字如画|八字之中暗藏玄机|隐约察得一语玄机)[，、：:\s]*/g, '')
+    .replace(/^[^。！？\n]{0,18}(玄机|北斗|八字如画|八字之中)[^。！？\n]{0,18}[，、：:\s]*/g, '')
     .replace(/^(愿岁月静好，福至绵长，得稳如山岳；明己。)\s*/g, '')
     .trim();
+  const sentences = summaryText
+    .split(/[。！？\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
   const firstSentence = summaryText
     .split(/[。！？\n]/)
     .map((item) => item.trim())
     .filter(Boolean)[0] || '';
-  const actionMatch = summaryText.match(
-    /(先把[^。！？\n]{0,50}|先停掉[^。！？\n]{0,50}|先收掉[^。！？\n]{0,50}|先暂停[^。！？\n]{0,50}|你现在先[^。！？\n]{0,50}|这周先[^。！？\n]{0,50}|更实际一点的做法是[^。！？\n]{0,60}|这一步更重要的是[^。！？\n]{0,60}|先做一件事[^。！？\n]{0,50})/
-  );
+  const actionSentence = sentences.find((sentence) => (
+    /^(先|今晚先|今天先|这周先|你现在先|先把|先停掉|先收掉|先暂停|先做一件事|更实际一点的做法是|这一步更重要的是|不要急着|别急着)/.test(sentence)
+  ));
+  const actionMatch = actionSentence
+    || (summaryText.match(
+      /(先把[^。！？\n]{0,60}|先停掉[^。！？\n]{0,60}|先收掉[^。！？\n]{0,60}|先暂停[^。！？\n]{0,60}|今晚先[^。！？\n]{0,60}|今天先[^。！？\n]{0,60}|这周先[^。！？\n]{0,60}|你现在先[^。！？\n]{0,60}|更实际一点的做法是[^。！？\n]{0,80}|这一步更重要的是[^。！？\n]{0,80}|先做一件事[^。！？\n]{0,60}|不要急着[^。！？\n]{0,60}|别急着[^。！？\n]{0,60})/
+    )?.[0] || '');
   const normalizedJudgment = firstSentence
     .replace(/^(你真正的问题不是|真正的问题不是)/, '问题不在')
     .replace(/^(先说结论[:：]?\s*)/, '')
@@ -1236,7 +1245,7 @@ function deriveMemoryWriteback({
     topicType,
     intentType,
     coreJudgment: normalizedJudgment,
-    actionGiven: textOf(actionMatch?.[0]),
+    actionGiven: textOf(actionMatch),
     lastOpenLoop: followUpAnchor,
     recentMoodTrend: /(缓下来|稳住|轻一点|松一点)/.test(text) ? 'up' : 'unknown',
   };

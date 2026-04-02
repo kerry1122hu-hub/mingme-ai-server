@@ -292,6 +292,37 @@ function buildZodiacSummary(profile = {}, chart = {}) {
   return textOf(chart?.westernSummary || chart?.zodiacSummary || profile?.zodiacSummary || chart?.narrative?.personality_hint);
 }
 
+function normalizeStrengthText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return textOf(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return textOf(value);
+  if (typeof value === 'object') {
+    return textOf(
+      value.label
+      || value.summary
+      || value.level
+      || value.type
+      || value.name
+      || value.state
+      || value.result
+    );
+  }
+  return '';
+}
+
+function buildBaziSummary(chart = {}) {
+  const pillars = getPillarsFromChart(chart).filter(Boolean);
+  const strength = normalizeStrengthText(chart?.dayStrength || chart?.strengthLevel || chart?.formatted?.dayStrength);
+  const useGod = textOf(chart?.primaryUseGod || chart?.formatted?.useGod || chart?.useGod);
+  const tenGodSummary = textOf(chart?.tenGodSummary || chart?.formatted?.tenGodSummary);
+  const parts = [];
+  if (pillars.length === 4) parts.push(`四柱为${pillars.join('、')}`);
+  if (strength) parts.push(`日元状态偏${strength}`);
+  if (useGod) parts.push(`当前主用神落在${useGod}`);
+  if (tenGodSummary) parts.push(`十神重点在${tenGodSummary}`);
+  return parts.join('；');
+}
+
 function detectEmotionState(userMessage = '') {
   const text = textOf(userMessage);
   if (!text) return '平稳';
@@ -408,6 +439,28 @@ function inferExecutionStatus(userMessage = '') {
   return '';
 }
 
+function stripNarrativeLeadIn(text = '') {
+  return textOf(text)
+    .replace(/^(抚掌而笑|肃然正襟|我看了看你的盘|我先直说|先直说|先说结论|整衣冠而向北斗)[，、：:\s]*/g, '')
+    .replace(/^(空中显现八字玄机|此刻八字玄机浮现|这张盘一展开|这个地方倒真有点意思|虚空浮现你八字如画|八字之中暗藏玄机|隐约察得一语玄机)[，、：:\s]*/g, '')
+    .replace(/^[^。！？\n]{0,18}(玄机|北斗|八字如画|八字之中)[^。！？\n]{0,18}[，、：:\s]*/g, '')
+    .replace(/^(愿岁月静好，福至绵长，得稳如山岳；明己。)\s*/g, '')
+    .trim();
+}
+
+function extractActionLine(text = '') {
+  const cleaned = stripNarrativeLeadIn(text);
+  const sentences = cleaned
+    .split(/[。！？\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return textOf(
+    sentences.find((sentence) => /^(先|今晚先|今天先|这周先|你现在先|先把|先停掉|先收掉|先暂停|先做一件事|更实际一点的做法是|这一步更重要的是|不要急着|别急着)/.test(sentence))
+    || (cleaned.match(/(先把[^。！？\n]{0,60}|先停掉[^。！？\n]{0,60}|先收掉[^。！？\n]{0,60}|先暂停[^。！？\n]{0,60}|今晚先[^。！？\n]{0,60}|今天先[^。！？\n]{0,60}|这周先[^。！？\n]{0,60}|你现在先[^。！？\n]{0,60}|更实际一点的做法是[^。！？\n]{0,80}|这一步更重要的是[^。！？\n]{0,80}|先做一件事[^。！？\n]{0,60}|不要急着[^。！？\n]{0,60}|别急着[^。！？\n]{0,60})/)?.[0]
+    || ''
+  ));
+}
+
 function buildRecentSessionSummary({
   userMessage = '',
   assistantReply = '',
@@ -415,7 +468,7 @@ function buildRecentSessionSummary({
   followUpAnchor = '',
 }) {
   const issue = textOf(userMessage).slice(0, 180);
-  const reply = textOf(assistantReply);
+  const reply = stripNarrativeLeadIn(assistantReply);
   const firstSentence = reply
     .split(/[\n。！？]/)
     .map((item) => item.trim())
@@ -433,6 +486,34 @@ function buildRecentSessionSummary({
     openLoop: textOf(followUpAnchor || route.lastOpenLoop).slice(0, 180),
     importanceScore: clampNumber(route.importanceScore || (issue.length > 40 ? 7 : 5), 1, 10, 5),
     embeddingText: [issue, textOf(route.coreJudgment), textOf(route.actionGiven), textOf(followUpAnchor)].filter(Boolean).join(' | ').slice(0, 400),
+  };
+}
+
+function buildRecentSessionSummary({
+  userMessage = '',
+  assistantReply = '',
+  route = {},
+  followUpAnchor = '',
+}) {
+  const issue = textOf(userMessage).slice(0, 180);
+  const reply = stripNarrativeLeadIn(assistantReply);
+  const firstSentence = reply
+    .split(/[。！？\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)[0] || reply.slice(0, 80);
+  const actionText = textOf(route.actionGiven || extractActionLine(reply)).slice(0, 180);
+  return {
+    sessionId: buildSessionId(),
+    topicType: textOf(route.topicType, 'general'),
+    intentType: textOf(route.intentType, 'clarify'),
+    userIssue: issue,
+    emotionState: detectEmotionState(userMessage),
+    aiJudgment: textOf(route.coreJudgment || firstSentence).slice(0, 180),
+    aiAction: actionText,
+    userFeedback: inferExecutionStatus(userMessage) ? issue : '',
+    openLoop: textOf(followUpAnchor || route.lastOpenLoop).slice(0, 180),
+    importanceScore: clampNumber(route.importanceScore || (issue.length > 40 ? 7 : 5), 1, 10, 5),
+    embeddingText: [issue, textOf(route.coreJudgment || firstSentence), actionText, textOf(followUpAnchor)].filter(Boolean).join(' | ').slice(0, 400),
   };
 }
 
