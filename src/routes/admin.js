@@ -482,7 +482,7 @@ router.get('/ai-usage', (req, res) => {
           <button id="loadMemoryBtn">查看会员记忆</button>
           <div class="status" id="memoryStatus"></div>
         </div>
-        <div id="memoryDetail" class="memory-panel muted">先输入 userKey，再查看这位会员的长期关注、反复卡点、回答偏好和上次没聊完的话题。</div>
+        <div id="memoryDetail" class="memory-panel muted">先输入 userKey，再查看这位会员的用户画像、近期 10 次摘要、长期模式和动作追踪。</div>
 
         <h2 style="margin-top:20px;">最近会员记忆概览</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
@@ -951,6 +951,7 @@ router.get('/ai-usage', (req, res) => {
     }
 
     function renderMemoryDetail(memory) {
+      const profile = memory.userProfile || {};
       const focus = joinText(memory.profileMemory?.longTermFocus, '未形成');
       const pain = joinText(memory.profileMemory?.recurringPainPoints, '未形成');
       const compared = joinText(memory.sessionMemory?.lastComparedOptions, '无');
@@ -962,29 +963,93 @@ router.get('/ai-usage', (req, res) => {
         memory.responsePreference?.likesFollowupQuestion ? '接受追问' : '',
         memory.responsePreference?.avoidVerboseTemplate ? '不喜欢模板长答' : '',
       ].filter(Boolean).join('、') || '未形成';
-      const questionHistory = Array.isArray(memory.questionHistory) ? memory.questionHistory : [];
-      const historyHtml = questionHistory.length
-        ? questionHistory.map((item) => (
+      const recentSessions = Array.isArray(memory.recentSessions) ? memory.recentSessions : [];
+      const longTermPatterns = Array.isArray(memory.longTermPatterns) ? memory.longTermPatterns : [];
+      const pendingActions = Array.isArray(memory.actionTracker?.pendingActions) ? memory.actionTracker.pendingActions : [];
+      const recentActions = Array.isArray(memory.actionTracker?.recentActions) ? memory.actionTracker.recentActions : [];
+
+      const profileHtml = [
+        '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
+        '<div class="memory-line"><strong>昵称：</strong>' + (profile.nickname || '未留昵称') + '</div>',
+        '<div class="memory-line"><strong>出生资料：</strong>' + (profile.birthSolar || '未留出生资料') + '</div>',
+        '<div class="memory-line"><strong>八字摘要：</strong>' + (profile.baziSummary || '尚未形成') + '</div>',
+        '<div class="memory-line"><strong>决策风格：</strong>' + (profile.decisionStyle || '尚在形成') + '</div>',
+        '<div class="memory-line"><strong>情绪模式：</strong>' + (profile.emotionPattern || '尚在形成') + '</div>',
+        '<div class="memory-line"><strong>关系模式：</strong>' + (profile.relationshipPattern || '尚在形成') + '</div>',
+        '<div class="memory-line"><strong>金钱模式：</strong>' + (profile.moneyPattern || '尚在形成') + '</div>',
+        '<div class="memory-line"><strong>回答偏好：</strong>' + prefs + '</div>',
+      ].join('');
+
+      const recentHtml = recentSessions.length
+        ? recentSessions.map((item) => (
           '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">' +
-            '<div class="muted" style="margin-bottom:4px;">' + (item.createdAt || '--') + ' / ' + (item.topicType || 'general') + '</div>' +
-            '<div><strong>用户问题：</strong>' + (item.userMessage || '暂无') + '</div>' +
-            (item.assistantReply ? '<div class="muted" style="margin-top:4px;"><strong>当时回复：</strong>' + item.assistantReply + '</div>' : '') +
+            '<div class="muted" style="margin-bottom:4px;">' + (item.turnTime || item.createdAt || '--') + ' / ' + (item.topicType || 'general') + ' / ' + (item.intentType || 'clarify') + '</div>' +
+            '<div><strong>问题：</strong>' + (item.userIssue || '暂无') + '</div>' +
+            '<div style="margin-top:4px;"><strong>判断：</strong>' + (item.aiJudgment || '暂无') + '</div>' +
+            '<div style="margin-top:4px;"><strong>动作：</strong>' + (item.aiAction || '暂无') + '</div>' +
+            '<div class="muted" style="margin-top:4px;"><strong>未完结：</strong>' + (item.openLoop || '暂无') + '</div>' +
           '</div>'
         )).join('')
-        : '<div class="memory-line muted">暂时还没有累计的问题历史。</div>';
+        : '<div class="memory-line muted">最近还没有形成摘要卡。</div>';
+
+      const patternHtml = longTermPatterns.length
+        ? longTermPatterns.map((item) => (
+          '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">' +
+            '<div><strong>' + (item.patternTitle || '长期模式') + '</strong></div>' +
+            '<div style="margin-top:4px;">' + (item.patternSummary || '暂无') + '</div>' +
+            '<div class="muted" style="margin-top:4px;">出现 ' + (item.evidenceCount || 0) + ' 次 / 置信 ' + (item.confidenceScore || 0) + ' / 最近一次 ' + (item.lastSeenAt || '--') + '</div>' +
+          '</div>'
+        )).join('')
+        : '<div class="memory-line muted">长期模式还在积累中。</div>';
+
+      const actionHtml = (pendingActions.length || recentActions.length)
+        ? [
+            pendingActions.length
+              ? '<div class="memory-line"><strong>待跟进动作</strong></div>' + pendingActions.map((item) => (
+                '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">' +
+                  '<div><strong>' + (item.actionText || '暂无') + '</strong></div>' +
+                  '<div class="muted" style="margin-top:4px;">类型：' + (item.actionType || '行动') + (item.dueHint ? ' / 建议时机：' + item.dueHint : '') + '</div>' +
+                '</div>'
+              )).join('')
+              : '<div class="memory-line muted">当前没有待跟进动作。</div>',
+            recentActions.length
+              ? '<div class="memory-line" style="margin-top:14px;"><strong>最近动作记录</strong></div>' + recentActions.map((item) => (
+                '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">' +
+                  '<div><strong>' + (item.actionText || '暂无') + '</strong></div>' +
+                  '<div class="muted" style="margin-top:4px;">状态：' + (item.executionStatus || 'pending') + ' / 更新时间：' + (item.updatedAt || '--') + '</div>' +
+                  (item.userResultNote ? '<div class="muted" style="margin-top:4px;"><strong>用户反馈：</strong>' + item.userResultNote + '</div>' : '') +
+                '</div>'
+              )).join('')
+              : '',
+          ].join('')
+        : '<div class="memory-line muted">动作追踪还没有积累记录。</div>';
 
       memoryDetail.innerHTML = [
-        '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
-        '<div class="memory-line"><strong>长期关注：</strong>' + focus + '</div>',
-        '<div class="memory-line"><strong>反复卡点：</strong>' + pain + '</div>',
-        '<div class="memory-line"><strong>上次核心判断：</strong>' + (memory.sessionMemory?.lastCoreJudgment || '暂无') + '</div>',
-        '<div class="memory-line"><strong>上次给的动作：</strong>' + (memory.sessionMemory?.lastActionGiven || '暂无') + '</div>',
-        '<div class="memory-line"><strong>上次未完结点：</strong>' + (memory.sessionMemory?.lastOpenLoop || '暂无') + '</div>',
-        '<div class="memory-line"><strong>上次比较题：</strong>' + compared + '</div>',
-        '<div class="memory-line"><strong>最近情绪走势：</strong>' + (memory.sessionMemory?.recentMoodTrend || 'unknown') + '</div>',
-        '<div class="memory-line"><strong>回答偏好：</strong>' + prefs + '</div>',
-        '<div class="memory-line" style="margin-top:14px;"><strong>累计问题历史：</strong></div>',
-        historyHtml,
+        '<div style="display:grid;gap:14px;">',
+          '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+            '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">一、用户画像</div>',
+            profileHtml,
+            '<div class="memory-line" style="margin-top:10px;"><strong>长期关注：</strong>' + focus + '</div>',
+            '<div class="memory-line"><strong>反复卡点：</strong>' + pain + '</div>',
+            '<div class="memory-line"><strong>上次比较题：</strong>' + compared + '</div>',
+          '</div>',
+          '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+            '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">二、近期 10 次摘要</div>',
+            recentHtml,
+          '</div>',
+          '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+            '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">三、长期模式</div>',
+            patternHtml,
+          '</div>',
+          '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+            '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">四、动作追踪</div>',
+            '<div class="memory-line"><strong>最近情绪走势：</strong>' + (memory.sessionMemory?.recentMoodTrend || 'unknown') + '</div>',
+            '<div class="memory-line"><strong>上次核心判断：</strong>' + (memory.sessionMemory?.lastCoreJudgment || '暂无') + '</div>',
+            '<div class="memory-line"><strong>上次给的动作：</strong>' + (memory.sessionMemory?.lastActionGiven || '暂无') + '</div>',
+            '<div class="memory-line"><strong>上次未完结点：</strong>' + (memory.sessionMemory?.lastOpenLoop || '暂无') + '</div>',
+            '<div style="margin-top:10px;">' + actionHtml + '</div>',
+          '</div>',
+        '</div>',
       ].join('');
     }
 

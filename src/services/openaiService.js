@@ -1405,6 +1405,7 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
         userKey,
         chart,
         memberTier,
+        profile,
         userMessage: message,
         assistantReply: directReply,
         route: deriveMemoryWriteback({
@@ -1476,6 +1477,7 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
     userKey,
     chart,
     memberTier,
+    profile,
     userMessage: message,
     assistantReply: sanitized,
     route: deriveMemoryWriteback({
