@@ -1215,16 +1215,27 @@ function deriveMemoryWriteback({
   followUpAnchor = '',
 }) {
   const text = textOf(reply);
-  const firstSentence = text
+  const summaryText = text
+    .replace(/^(抚掌而笑|肃然正襟|我看了看你的盘|我先直说|先直说|先说结论)[，、：:\s]*/g, '')
+    .replace(/^(空中显现八字玄机|此刻八字玄机浮现|这张盘一展开|这个地方倒真有点意思)[，、：:\s]*/g, '')
+    .replace(/^(愿岁月静好，福至绵长，得稳如山岳；明己。)\s*/g, '')
+    .trim();
+  const firstSentence = summaryText
     .split(/[。！？\n]/)
     .map((item) => item.trim())
     .filter(Boolean)[0] || '';
-  const actionMatch = text.match(/(先把[^。！？\n]{0,40}|更实际一点的做法是[^。！？\n]{0,50}|你现在先[^。！？\n]{0,40}|这一步更重要的是[^。！？\n]{0,50})/);
+  const actionMatch = summaryText.match(
+    /(先把[^。！？\n]{0,50}|先停掉[^。！？\n]{0,50}|先收掉[^。！？\n]{0,50}|先暂停[^。！？\n]{0,50}|你现在先[^。！？\n]{0,50}|这周先[^。！？\n]{0,50}|更实际一点的做法是[^。！？\n]{0,60}|这一步更重要的是[^。！？\n]{0,60}|先做一件事[^。！？\n]{0,50})/
+  );
+  const normalizedJudgment = firstSentence
+    .replace(/^(你真正的问题不是|真正的问题不是)/, '问题不在')
+    .replace(/^(先说结论[:：]?\s*)/, '')
+    .trim();
 
   return {
     topicType,
     intentType,
-    coreJudgment: firstSentence,
+    coreJudgment: normalizedJudgment,
     actionGiven: textOf(actionMatch?.[0]),
     lastOpenLoop: followUpAnchor,
     recentMoodTrend: /(缓下来|稳住|轻一点|松一点)/.test(text) ? 'up' : 'unknown',
