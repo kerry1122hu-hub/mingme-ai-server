@@ -481,11 +481,11 @@ function buildRecentSessionSummary({
     userIssue: issue,
     emotionState: detectEmotionState(userMessage),
     aiJudgment: textOf(route.coreJudgment || firstSentence).slice(0, 180),
-    aiAction: textOf(route.actionGiven || actionMatch?.[0]).slice(0, 180),
+    aiAction: textOf(route.actionGiven || extractActionLine(reply) || actionMatch?.[0]).slice(0, 180),
     userFeedback: inferExecutionStatus(userMessage) ? issue : '',
     openLoop: textOf(followUpAnchor || route.lastOpenLoop).slice(0, 180),
     importanceScore: clampNumber(route.importanceScore || (issue.length > 40 ? 7 : 5), 1, 10, 5),
-    embeddingText: [issue, textOf(route.coreJudgment), textOf(route.actionGiven), textOf(followUpAnchor)].filter(Boolean).join(' | ').slice(0, 400),
+    embeddingText: [issue, textOf(route.coreJudgment || firstSentence), textOf(route.actionGiven || extractActionLine(reply) || actionMatch?.[0]), textOf(followUpAnchor)].filter(Boolean).join(' | ').slice(0, 400),
   };
 }
 
