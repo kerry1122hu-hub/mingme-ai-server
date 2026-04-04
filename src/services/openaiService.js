@@ -529,7 +529,7 @@ function detectDeterministicIntent(text = '') {
   if (/(下个大运|下一步大运|下步大运|接下来走什么大运)/.test(value)) return 'next_dayun';
   if (/(当前大运|现走什么大运|走什么大运|这步大运|当前这步运)/.test(value)) return 'current_dayun';
   if (/(当前流年|今年流年|流年是什么|今年是什么年运|流年呢)/.test(value)) return 'liunian';
-  if (/(现在是什么月|现在什么月|这个月是什么月|当前是什么月|目前是什么月|当前流月|现在流月|现在是什么月令|当前月令)/.test(value)) return 'current_month';
+  if (/(现在是什么月|现在什么月|现在是几月|这个月是什么月|这个月是几月|当前是什么月|目前是什么月|目前是几月|当前流月|现在流月|现在是什么月令|当前月令)/.test(value)) return 'current_month';
   if (/(生肖|属相)/.test(value)) return 'zodiac';
   if (/(纳音)/.test(value)) return 'nayin';
   if (/(我是什么八字|我的八字是什么|八字是什么|我的四柱是什么|我的四柱八字是什么|四柱是什么|四柱八字是什么|八字盘是什么|八字结构是什么)/.test(value)) return 'four_pillars';
