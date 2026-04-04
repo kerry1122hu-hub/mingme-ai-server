@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const DAILY_LIMIT = 3;
+const DAILY_LIMIT = Math.max(0, Number(process.env.DAILY_LIMIT || 3) || 3);
 const IS_RENDER = Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL);
 const migrationMessages = [];
 
@@ -324,18 +324,14 @@ function consumeQuota({ userKey, chart, profile }) {
     throw error;
   }
 
-  if (status.isPremium) {
-    return status;
-  }
-
   const nextUsed = status.used + 1;
   upsertUsage(status.userKey, status.dateKey, nextUsed);
 
   return {
     ...status,
     used: nextUsed,
-    remaining: Math.max(0, status.dailyLimit - nextUsed),
-    allowed: nextUsed < status.dailyLimit,
+    remaining: status.isPremium ? 999 : Math.max(0, status.dailyLimit - nextUsed),
+    allowed: status.isPremium ? true : nextUsed < status.dailyLimit,
   };
 }
 
