@@ -404,6 +404,18 @@ function getLiunianPillar(chart) {
   return getPillarLabel(chart?.liuNianPillar);
 }
 
+function getCurrentMonthPillar(chart) {
+  return getPillarLabel(chart?.currentMonthPillar);
+}
+
+function getCurrentJieqiName(chart) {
+  return (
+    textOf(chart?.currentJieqiMonth?.currentJieqi?.name) ||
+    textOf(chart?.currentJieqiMonth?.name) ||
+    '未明确'
+  );
+}
+
 function getBirthYearFromChart(chart) {
   const candidates = [
     chart?.birthInfo?.year,
@@ -517,6 +529,7 @@ function detectDeterministicIntent(text = '') {
   if (/(下个大运|下一步大运|下步大运|接下来走什么大运)/.test(value)) return 'next_dayun';
   if (/(当前大运|现走什么大运|走什么大运|这步大运|当前这步运)/.test(value)) return 'current_dayun';
   if (/(当前流年|今年流年|流年是什么|今年是什么年运|流年呢)/.test(value)) return 'liunian';
+  if (/(现在是什么月|现在什么月|这个月是什么月|当前是什么月|目前是什么月|当前流月|现在流月|现在是什么月令|当前月令)/.test(value)) return 'current_month';
   if (/(生肖|属相)/.test(value)) return 'zodiac';
   if (/(纳音)/.test(value)) return 'nayin';
   if (/(我是什么八字|我的八字是什么|八字是什么|我的四柱是什么|我的四柱八字是什么|四柱是什么|四柱八字是什么|八字盘是什么|八字结构是什么)/.test(value)) return 'four_pillars';
@@ -559,6 +572,8 @@ function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false
   const nextDayun = getNextDayun(chart);
   const nextDayunAgeRange = getNextDayunAgeRange(chart);
   const liunian = getLiunianPillar(chart) || getLiunianTheme(chart) || '未明确';
+  const currentMonth = getCurrentMonthPillar(chart) || '未明确';
+  const currentJieqi = getCurrentJieqiName(chart);
   const useGod = getPrimaryUseGod(chart);
   const formatPillar = (key) => getChartPillarText(chart, key);
   const fourPillarsText = `年柱${formatPillar('year')}、月柱${formatPillar('month')}、日柱${formatPillar('day')}、时柱${formatPillar('hour')}`;
@@ -584,6 +599,9 @@ function buildDeterministicReply(intent = '', chart = {}, { isCorrection = false
     liunian: isCorrection
       ? `重校后看，你今年的流年是${liunian}。`
       : `你今年的流年是${liunian}。`,
+    current_month: isCorrection
+      ? `按当前现实时间重算，此刻仍在${currentMonth}${currentJieqi && currentJieqi !== '未明确' ? `这一步节气月（${currentJieqi}阶段）` : '这一步节气月'}。`
+      : `按现实时间推，你现在所在的节气月是${currentMonth}${currentJieqi && currentJieqi !== '未明确' ? `，当前节气落在${currentJieqi}` : ''}。这一层看的是当前流月，不是出生月柱。`,
     zodiac: isCorrection ? `重校后看，你的生肖是${getShengXiao(chart)}。` : `你的生肖是${getShengXiao(chart)}。`,
     nayin: isCorrection ? `重校后看，你的纳音是${getNaYin(chart)}。` : `你的纳音是${getNaYin(chart)}。`,
     four_pillars: composeChartReply(
@@ -1177,6 +1195,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
     `- 今日与日主关系：${getTodayRelation(chart)}`,
     `- 当前大运：${currentDayun}${currentDayunAgeRange ? `（约${currentDayunAgeRange}）` : ''}`,
     `- 当前流年：${getLiunianPillar(chart) || '未明确'}`,
+    `- 当前流月：${getCurrentMonthPillar(chart) || '未明确'}${getCurrentJieqiName(chart) && getCurrentJieqiName(chart) !== '未明确' ? `（${getCurrentJieqiName(chart)}阶段）` : ''}`,
     `- 核心状态：${textOf(narrative?.core_summary || chart?.coreSummary || chart?.core_summary, '未提供')}`,
     `- 当前阶段：${textOf(narrative?.stage_summary || chart?.stageSummary || chart?.stage_summary, '未提供')}`,
     `- 行动建议：${toList(narrative?.action_hints || chart?.actionHints || chart?.action_hints).join('；') || '未提供'}`,
