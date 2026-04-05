@@ -116,10 +116,46 @@ const SYSTEM_PROMPT_COMPANION = `${MASTER_PERSONA_BASE}
 【你的任务】
 根据系统提供的四柱八字结构、阶段信息与对话上下文，自然回应用户当下最在意的问题。
 
+【内部研判规则】
+你先是“明己·命理研判引擎”，然后才是“明己AI先生”的表达者。
+你的任务不是重新排盘，也不是随意改写基础结论，而是基于系统给定的结构化结果，对用户当前问事做严谨、可复核的推演。
+
+【工作边界】
+1. 不能自行排盘。
+2. 不能擅自重算日主强弱、格局、用神、忌神，除非系统上下文里已经提供。
+3. 不能靠神煞堆砌、口诀套断、夸张盲派口吻直接下结论。
+4. 不得宿命化，不得把风险说成注定发生。
+5. 不得编造经典原文或伪造出处。
+
+【研判顺序】
+1. 先判断用户本次问的是哪一类：事业 / 关系 / 金钱 / 健康 / 迁移 / 家庭 / 情绪 / 学业 / 官非。
+2. 先看原局对该主题的底层倾向，不重复泛讲整张盘。
+3. 再看当前大运是在放大、缓和，还是扭转这件事。
+4. 再看流年在触发什么。
+5. 再看流月与流日是在推快、压住、还是把矛盾点点燃。
+6. 最后给：
+   - 最可能情景
+   - 次可能情景
+   - 风险触发条件
+   - 有利触发条件
+   - 时间窗口
+   - 现实建议
+
+【判断优先级】
+当前用户问题 > 近期相关记忆 > 长期模式 > 原局结构 > 大运 > 流年 > 流月 > 流日 > 八字/星座外层标签
+
+【输出底线】
+- 先说明“为什么会这样”，再说“可能会发生什么”。
+- 对事件判断只给高概率 / 中概率 / 低概率，不给绝对预言。
+- 时间判断尽量落到月份、节气窗口、近7天/近30天。
+- 若信息不足，要直接说哪一层不足，以及它会影响判断到什么程度。`;
+
+const SYSTEM_PROMPT_COMPANION_STYLE = `
+
 【表达方式】
 1. 中文，像一个有道行、也懂现实的人在说话。
 2. 保留宗师气质，但语气要真诚、从容、有分寸。
-3. 长度自然即可，不要为了控字数故意反问用户。
+3. 长度可以比过去更展开，但不要散；先给结论，再把判断链讲清楚。
 4. 可以直接说出专业判断，例如“庚金七杀压身”“丁火食神透出”“流年催动财星”，但后面要补一句现代解释。
 5. 不要像客服，不要像教科书，不要每轮都重新起一篇报告。
 6. 用户如果直接问运势、财运、感情、时机、开运、灵性诉求，就直接分析，不要先绕开问题。
@@ -180,6 +216,7 @@ const USER_PROMPT_TEMPLATE_COMPANION = `【模式】
 - intent_type: {{intent_type}}
 - topic_type: {{topic_type}}
 - topic_focus: {{topic_focus}}
+- likely_user_concern: {{likely_user_concern}}
 
 【对话参考】
 - next_state: {{next_state}}
@@ -196,7 +233,12 @@ const USER_PROMPT_TEMPLATE_COMPANION = `【模式】
 - 第一用神：{{primary_use_god}}
 - 当前大运主题：{{dayun_theme}}
 - 当前流年主题：{{liunian_theme}}
+- 当前流月：{{current_month}}
+- 今日日柱：{{today_pillar}}
+- 今日与日主关系：{{today_relation}}
 - 十神重点：{{ten_god_summary}}
+- 冲合刑害：{{structure_summary}}
+- 风险标签：{{risk_tags}}
 
 【伴聊记忆】
 - 上次核心判断：{{last_core_judgment}}
@@ -214,7 +256,10 @@ const USER_PROMPT_TEMPLATE_COMPANION = `【模式】
 - 如果已经足够判断，就直接判断；如果已经足够建议，就直接建议
 - 只有在补问会明显改变判断时，才问一个关键问题
 - 不要重复上轮已经说过的话
-- 保留玄学术语，但要顺手解释成人话`;
+- 保留玄学术语，但要顺手解释成人话
+- 若用户问事明确，优先按“底层结构 -> 大运影响 -> 流年触发 -> 流月/流日推进 -> 建议”的顺序组织
+- 若用户问得很模糊，可以根据命局主线和近期记忆先点出他最可能真正在意的那层，再接住问题
+- 结论要更完整，字数可以展开到原来的一倍，但不要散，不要模板化`;
 
 const USER_PROMPT_TEMPLATE = `【命理结构摘要】
 - 核心状态：{{core_summary}}
@@ -982,6 +1027,56 @@ function detectTopicFocus(userInput = '', topicType = 'career') {
   return '方向、节奏和取舍判断' + (shortText ? `；原话重点：${shortText}` : '');
 }
 
+function inferLikelyUserConcern(chart = {}, topicType = 'career', topicFocus = '') {
+  const dayunTheme = getDayunTheme(chart);
+  const liunianTheme = getLiunianTheme(chart);
+  const currentMonth = getCurrentMonthPillar(chart);
+  const todayRelation = getTodayRelation(chart);
+  const useGod = getPrimaryUseGod(chart);
+  const structure = getStructureSummary(chart);
+
+  const base = {
+    career: '他多半真正在意方向该不该收、项目该不该停、这一步扩张是不是会伤主线。',
+    relationship: '他多半真正在意这段关系值不值得继续、边界要不要立、下一句该怎么说。',
+    money: '他多半真正在意钱该守还是该动、当前投入回报比是否失衡、短期风险会不会放大。',
+    emotion: '他多半真正在意自己是不是在硬撑、该不该停、以及怎么先把状态稳回来。',
+    health: '他多半真正在意长期耗损、透支节奏，以及再硬扛会不会拖出更深的问题。',
+    family: '他多半真正在意家庭责任、情绪消耗和关系牵扯到底要先稳哪一头。',
+    study: '他多半真正在意继续投入值不值、方向是否走偏、以及节奏是否太散。',
+  }[topicType] || '他多半真正在意当下最卡住自己的那一层，而不是表面那一句话。';
+
+  const hints = [
+    topicFocus ? `本轮明面焦点：${topicFocus}` : '',
+    dayunTheme && dayunTheme !== '未明确' ? `大运主线：${dayunTheme}` : '',
+    liunianTheme && liunianTheme !== '未明确' ? `流年触发：${liunianTheme}` : '',
+    currentMonth && currentMonth !== '未明确' ? `流月落点：${currentMonth}` : '',
+    todayRelation && todayRelation !== '未明确' ? `流日关系：${todayRelation}` : '',
+    useGod && useGod !== '未明确' ? `用神侧重：${useGod}` : '',
+    structure && structure !== '未单独展开' ? `结构提示：${structure}` : '',
+  ].filter(Boolean);
+
+  return [base, ...hints].join(' ');
+}
+
+function buildRiskTags(chart = {}, topicType = 'career') {
+  const structure = getStructureSummary(chart);
+  const dayunTheme = getDayunTheme(chart);
+  const liunianTheme = getLiunianTheme(chart);
+  const todayRelation = getTodayRelation(chart);
+  const emotionHint = textOf(getNarrative(chart)?.emotional_hint || chart?.emotionalHint || chart?.emotional_hint);
+  const tags = [];
+
+  if (/(冲|刑|害|破|反吟|伏吟)/.test(structure)) tags.push('结构波动');
+  if (/(压力|焦虑|内耗|透支|硬撑|失衡)/.test(emotionHint)) tags.push('情绪透支');
+  if (/(主线|扩张|分散|收束|摊开)/.test(dayunTheme)) tags.push('主线失焦');
+  if (/(财|现金流|回报|投入|风险)/.test(liunianTheme) || topicType === 'money') tags.push('财务判断');
+  if (/(官|杀|规则|制度|口舌|冲突)/.test(liunianTheme)) tags.push('外部压力');
+  if (/(克|耗|压)/.test(todayRelation)) tags.push('当日耗神');
+  if (!tags.length) tags.push('节奏判断');
+
+  return [...new Set(tags)].join('、');
+}
+
 function summarizeRecentMoodTrend(history = []) {
   const joined = (Array.isArray(history) ? history : [])
     .map((item) => textOf(item?.content))
@@ -1030,7 +1125,7 @@ function decideDialogueState({
     return {
       nextState: 'stabilize',
       shouldAskOneQuestion: false,
-      responseLength: { min: 40, max: 90 },
+      responseLength: { min: 80, max: 180 },
       rationale: '用户情绪在高位且信息有限，先接住情绪，不急着分析。',
     };
   }
@@ -1039,7 +1134,7 @@ function decideDialogueState({
     return {
       nextState: directQuestion ? 'judge' : 'advise',
       shouldAskOneQuestion: false,
-      responseLength: { min: 60, max: 140 },
+      responseLength: { min: 120, max: 280 },
       rationale: sessionMemory.last_open_loop
         ? '存在上轮未完结点，这轮直接承接，不重新开场。'
         : '用户明显在续聊，优先接上前文再往前推进。',
@@ -1051,14 +1146,14 @@ function decideDialogueState({
       return {
         nextState: 'stabilize',
         shouldAskOneQuestion: false,
-        responseLength: { min: 40, max: 90 },
+        responseLength: { min: 80, max: 180 },
         rationale: '这一轮更需要先接住，而不是立刻给结论。',
       };
     }
     return {
       nextState: 'close_softly',
       shouldAskOneQuestion: false,
-      responseLength: { min: 50, max: 100 },
+      responseLength: { min: 100, max: 200 },
       rationale: '情绪已被识别，先柔性收束，避免给太满的分析。',
     };
   }
@@ -1075,7 +1170,7 @@ function decideDialogueState({
     return {
       nextState: 'judge',
       shouldAskOneQuestion: false,
-      responseLength: { min: 70, max: 140 },
+      responseLength: { min: 140, max: 300 },
       rationale: '关键信息已足够，可以直接收束并给判断。',
     };
   }
@@ -1084,7 +1179,7 @@ function decideDialogueState({
     return {
       nextState: 'judge',
       shouldAskOneQuestion: false,
-      responseLength: { min: 80, max: 160 },
+      responseLength: { min: 160, max: 320 },
       rationale: '用户想要的是判断，不是泛泛安慰。',
     };
   }
@@ -1101,7 +1196,7 @@ function decideDialogueState({
     return {
       nextState: 'advise',
       shouldAskOneQuestion: false,
-      responseLength: { min: 80, max: 140 },
+      responseLength: { min: 160, max: 300 },
       rationale: '用户要的是下一步动作，直接给可执行建议。',
     };
   }
@@ -1109,7 +1204,7 @@ function decideDialogueState({
   return {
     nextState: 'judge',
     shouldAskOneQuestion: false,
-    responseLength: { min: 70, max: 140 },
+    responseLength: { min: 140, max: 280 },
     rationale: '默认进入判断分支。',
   };
 }
@@ -1180,6 +1275,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
   const rawInput = textOf(userInput) || textOf(fallbackInput) || textOf(userProfile) || '未提供';
   const topicType = detectTopicType(rawInput);
   const topicFocus = detectTopicFocus(rawInput, topicType);
+  const likelyUserConcern = inferLikelyUserConcern(chart, topicType, topicFocus);
   const currentDayun = getCurrentDayun(chart);
   const currentDayunAgeRange = getCurrentDayunAgeRange(chart);
   const forceDayunCorrection = shouldForceDayunCorrection(rawInput, history);
@@ -1187,6 +1283,7 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
     '以下是这位用户当前对话可参考的背景，只用于帮助你理解，不要照着复述。',
     `- 当前话题类型：${topicType}`,
     `- 当前问题焦点：${topicFocus}`,
+    `- 用户更可能真正想问：${likelyUserConcern}`,
     `- 四柱：${getChartPillarText(chart, 'year')} / ${getChartPillarText(chart, 'month')} / ${getChartPillarText(chart, 'day')} / ${getChartPillarText(chart, 'hour')}`,
     `- 日主：${getDayMasterLabel(chart)} | 日元状态：${getStrengthLevel(chart)}（${getStrengthScore(chart)}分）`,
     `- 纳音：${getNaYin(chart)} | 生肖：${getShengXiao(chart)} | 贵人：${getGuiRen(chart)}`,
@@ -1209,6 +1306,8 @@ function buildChatContext({ chart, userInput, fallbackInput, userProfile, histor
     `- 地支藏干：${getHiddenStemSummary(chart) || '未单独展开'}`,
     `- 神煞线索：${getShenShaSummary(chart) || '未单独展开'}`,
     `- 冲合刑害：${getStructureSummary(chart) || '未单独展开'}`,
+    `- 风险标签：${buildRiskTags(chart, topicType)}`,
+    '- 研判顺序：先看原局底层倾向，再看当前大运，再看流年触发，再看流月与流日推不推动，最后再落到概率、窗口和建议。',
     '- 灵性与助运判断：若用户问风水、开运、刺符、护身、招财、贵人、泰国经文符等，不要只当成泛财运问题，要判断其诉求更偏护身、聚财、贵人、定心、提势，还是执行力。',
     '- 小众经文符线索：若提到泰国经文符、刺符、宝袋、莲花经、帝王龙、左右手或前后背搭配，要从“立势、护运、起势、收局、聚财、稳心”的结构来解释。',
     '- 解释要求：可以直接使用四柱八字、五行生克、十神、大运流年等术语，但每次都要顺手翻译成现代语，让用户明白这和当前的压力、关系、节奏、选择、行动有什么关系。',
@@ -1295,6 +1394,12 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
     userInput: rawInput,
   });
   const memberPreferenceInstruction = buildMemberPreferenceInstruction(persistedMemberMemory);
+  const likelyUserConcern = inferLikelyUserConcern(chart, topicType, topicFocus);
+  const currentMonth = getCurrentMonthPillar(chart) || '未明确';
+  const todayPillar = getTodayPillar(chart) || '未明确';
+  const todayRelation = getTodayRelation(chart);
+  const structureSummary = getStructureSummary(chart) || '未单独展开';
+  const riskTags = buildRiskTags(chart, topicType);
 
   return {
     mode,
@@ -1310,6 +1415,7 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
       .replace('{{intent_type}}', intentType)
       .replace('{{topic_type}}', topicType)
       .replace('{{topic_focus}}', topicFocus)
+      .replace('{{likely_user_concern}}', likelyUserConcern)
       .replace('{{next_state}}', stateDecision.nextState)
       .replace('{{should_ask_one_question}}', String(stateDecision.shouldAskOneQuestion))
       .replace('{{target_length}}', `${stateDecision.responseLength.min}-${stateDecision.responseLength.max}字`)
@@ -1322,7 +1428,12 @@ function buildCompanionPrompt({ chart, userInput, fallbackInput, userProfile, hi
       .replace('{{primary_use_god}}', getPrimaryUseGod(chart))
       .replace('{{dayun_theme}}', getDayunTheme(chart))
       .replace('{{liunian_theme}}', getLiunianTheme(chart))
+      .replace('{{current_month}}', currentMonth)
+      .replace('{{today_pillar}}', todayPillar)
+      .replace('{{today_relation}}', todayRelation)
       .replace('{{ten_god_summary}}', getTenGodSummary(chart))
+      .replace('{{structure_summary}}', structureSummary)
+      .replace('{{risk_tags}}', riskTags)
       .replace('{{last_core_judgment}}', textOf(sessionMemory.last_core_judgment, '未提供'))
       .replace('{{last_action_given}}', textOf(sessionMemory.last_action_given, '未提供'))
       .replace('{{last_open_loop}}', textOf(sessionMemory.last_open_loop, '未提供'))
@@ -1511,6 +1622,8 @@ async function runChat({ userProfile, message, chart, history = [], userKey, pro
       {
         role: 'system',
         content: `${SYSTEM_PROMPT_COMPANION}
+
+${SYSTEM_PROMPT_COMPANION_STYLE}
 
 【口气修正】
 - 不要写成汇报稿，不要像“命盘信息显示”“根据以上分析”“总结来说”。
