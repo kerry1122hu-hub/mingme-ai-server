@@ -1697,6 +1697,106 @@ async function runReading({ instructions, input, chart, model = DEFAULT_MODEL })
   return sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
 }
 
+async function runXiaoLiuRenReading({
+  question = '',
+  chart,
+  userKey,
+  memberTier = 'free',
+  engineResult,
+  model = DEFAULT_MODEL,
+}) {
+  ensureOpenAIKey();
+
+  let memberMemory;
+  try {
+    memberMemory = getMemberMemory({ userKey, chart, memberTier });
+  } catch (error) {
+    console.error('[memory] failed to read member memory for xiao liu ren:', error);
+    memberMemory = null;
+  }
+
+  const payloadText = [
+    `【问事场景】${textOf(engineResult?.sceneName, '未明确')}`,
+    `【用户原问】${textOf(question, '此刻尚未说得很直，但系统会先按当前局面替他点题。')}`,
+    `【更可能真正想问的那层】${textOf(engineResult?.likelyConcern, '未明确')}`,
+    engineResult?.chartClues ? `【命盘与近期状态线索】${engineResult.chartClues}` : '',
+    '【小六壬主断结果】',
+    `- 主宫：${textOf(engineResult?.mainPalace?.palace_name)}（${textOf(engineResult?.mainPalace?.fortune_level)}）`,
+    `- 主宫总断：${textOf(engineResult?.mainPalace?.general_judgment)}`,
+    `- 场景主判断：${textOf(engineResult?.sceneMapping?.judgment)}`,
+    `- 场景短断：${textOf(engineResult?.sceneMapping?.short_output || engineResult?.summary)}`,
+    engineResult?.secondaryPalace
+      ? `- 辅宫：${textOf(engineResult?.secondaryPalace?.palace_name)}（${textOf(engineResult?.secondaryPalace?.fortune_level)}）`
+      : '',
+    engineResult?.comboMapping
+      ? `- 双宫组合：${textOf(engineResult?.comboMapping?.combo_name)} / ${textOf(engineResult?.comboMapping?.combo_level)}`
+      : '',
+    engineResult?.comboMapping ? `- 组合判断：${textOf(engineResult?.comboMapping?.judgment)}` : '',
+    engineResult?.comboMapping ? `- 趋势说明：${textOf(engineResult?.comboMapping?.trend)}` : '',
+    `- 宜：${toList(engineResult?.recommended).join('、') || '未提供'}`,
+    `- 忌：${toList(engineResult?.avoid).join('、') || '未提供'}`,
+    '【起卦时点】',
+    `- 月：${textOf(engineResult?.eventContext?.localMonth)}`,
+    `- 日：${textOf(engineResult?.eventContext?.localDay)}`,
+    `- 时支：${textOf(engineResult?.eventContext?.timeBranch)}`,
+    `- 时支序号：${textOf(engineResult?.eventContext?.timeBranchNumber)}`,
+  ].filter(Boolean).join('\n');
+
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.72,
+    max_completion_tokens: 760,
+    messages: [
+      {
+        role: 'system',
+        content: `${MASTER_PERSONA_BASE}
+
+【本轮专用身份】
+你先是“明己一卦·断事引擎”的表达者，然后才是“明己AI先生”。
+你不能改动系统已经算出的宫位、吉凶和断事结论。AI 不负责重断，只负责把结构化主断翻译成更像明己的话。
+
+【本轮工作边界】
+1. 不要重新起卦。
+2. 不要推翻主宫、辅宫、场景断语与组合断语。
+3. 不要拿空泛玄话代替断语。
+4. 可以结合命盘和近期状态理解“用户更可能真正在问什么”，但不能改掉小六壬主断。
+5. 要保持明己的气质，但去掉过度堆砌的玄学腔。
+
+【输出任务】
+- 先点明这卦落在什么势上。
+- 再把主宫、场景断、双宫组合串成一条判断链。
+- 若用户问题还泛，就先替他点破“他真正卡的是哪一层”。
+- 最后给出可以立刻执行的提醒。
+
+【输出结构】
+第一段：一句起手判断，直接告诉用户这卦是稳、拖、快、争、顺还是空。
+第二段：解释为什么这样看，要把主宫、场景断、双宫组合自然说出来。
+第三段：落到现实，告诉用户这件事现在宜怎么做、忌怎么做。
+第四段：留一句短的收势提醒，仍保留明己风格。
+
+【语言要求】
+- 允许有一点“老师傅当面点题”的味道，但不要只写意象。
+- 不要写成列表或汇报稿。
+- 不要出现“根据以上分析”“总结来说”。
+- 字数比普通回答略展开，但以断事清楚为先。`,
+      },
+      {
+        role: 'system',
+        content: [
+          memberMemory ? buildMemberMemoryContext(memberMemory) : '',
+          '这些记忆只用来理解用户，不要复读，也不要盖过这一次小六壬主断。',
+        ].filter(Boolean).join('\n\n'),
+      },
+      {
+        role: 'user',
+        content: payloadText,
+      },
+    ],
+  });
+
+  return sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
+}
+
 async function runTranscription({
   buffer,
   fileName = 'mingme-voice.m4a',
@@ -1731,6 +1831,7 @@ module.exports = {
   buildLLMUserPrompt,
   runChat,
   runReading,
+  runXiaoLiuRenReading,
   runTranscription,
 };
 

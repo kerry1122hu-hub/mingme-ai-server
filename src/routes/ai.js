@@ -1,11 +1,12 @@
 const express = require('express');
 const multer = require('multer');
-const { runChat, runReading, runTranscription } = require('../services/openaiService');
+const { runChat, runReading, runTranscription, runXiaoLiuRenReading } = require('../services/openaiService');
 const { getQuotaStatus, consumeQuota, getMembershipStatus } = require('../services/quotaService');
 const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { saveContactMessage } = require('../services/contactMessageService');
+const { runXiaoLiuRenEngine } = require('../services/xiaoLiuRenService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -83,6 +84,63 @@ router.post('/ai-reading', async (req, res) => {
     if (error.code === 'AI_QUOTA_EXCEEDED') {
       return res.status(status).json(fail('今日免费次数已用完，可开通会员继续使用 AI。', error.code, { quota: error.quota }));
     }
+    return res.status(status).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/xiao-liu-ren', async (req, res) => {
+  try {
+    const {
+      module,
+      question,
+      chart,
+      profile,
+      userKey,
+      sceneType,
+      scene_type,
+      mode,
+      query_context,
+      client_meta,
+      eventDateTime,
+      timezoneOffsetMinutes,
+      engineVersion,
+      engine_version,
+      model,
+      memberTier,
+    } = req.body || {};
+
+    const resolvedSceneType = sceneType || scene_type;
+    const resolvedEngineVersion = `${engineVersion || engine_version || 'v1.1'}`.trim() || 'v1.1';
+    const resolvedEventDateTime = query_context?.datetime || eventDateTime;
+    const resolvedTimezone = query_context?.timezone || 'Asia/Shanghai';
+
+    const engineResult = runXiaoLiuRenEngine({
+      question: `${question || ''}`.trim(),
+      sceneType: resolvedSceneType,
+      chart,
+      mode: `${mode || 'current'}`.trim() || 'current',
+      eventDateTime: resolvedEventDateTime,
+      timezoneOffsetMinutes,
+      engineVersion: resolvedEngineVersion,
+      timezone: resolvedTimezone,
+      clientMeta: client_meta || null,
+      module: `${module || 'mingji_one_gua'}`.trim() || 'mingji_one_gua',
+    });
+
+    const text = await runXiaoLiuRenReading({
+      question: `${question || ''}`.trim(),
+      chart,
+      userKey,
+      memberTier: `${memberTier || 'free'}`.trim() || 'free',
+      engineResult,
+      model: `${model || 'gpt-4o-mini'}`.trim(),
+    });
+
+    res.locals.outputLength = `${text || ''}`.length;
+    return res.json(ok({ text, engineResult }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    const status = error.status || 500;
     return res.status(status).json(fail(error.message || 'server error', 'SERVER_ERROR'));
   }
 });
