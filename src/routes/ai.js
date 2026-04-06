@@ -135,6 +135,7 @@ router.post('/xiao-liu-ren', async (req, res) => {
       sceneType: engineResult.sceneType,
       eventContext: engineResult.eventContext,
       clientMeta: client_meta || null,
+      chart,
     });
 
     if (engineResult?.normalizedPayload) {

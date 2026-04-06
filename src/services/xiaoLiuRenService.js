@@ -801,14 +801,28 @@ function getDivinationLimits(memberTier = '') {
   };
 }
 
-function resolveUsageIdentity({ userKey, clientMeta } = {}) {
+function buildChartIdentity(chart = {}) {
+  const birth = chart?.birthInfo || chart?.birth_info || {};
+  const tokens = [
+    birth?.year ?? chart?.solarYear,
+    birth?.month ?? chart?.solarMonth,
+    birth?.day ?? chart?.solarDay,
+    birth?.hour ?? chart?.solarHour,
+    birth?.minute ?? chart?.solarMinute,
+    `${chart?.gender || chart?.sex || ''}`.trim(),
+  ].filter((item) => item !== undefined && item !== null && `${item}`.trim() !== '');
+  if (!tokens.length) return '';
+  return `chart:${tokens.join('-')}`;
+}
+
+function resolveUsageIdentity({ userKey, clientMeta, chart } = {}) {
   const userIdentity = `${userKey || ''}`.trim();
   if (userIdentity) return userIdentity;
   const clientUserId = `${clientMeta?.user_id || ''}`.trim();
   if (clientUserId) return clientUserId;
   const deviceId = `${clientMeta?.device_id || ''}`.trim();
   if (deviceId) return deviceId;
-  return '';
+  return buildChartIdentity(chart);
 }
 
 function buildDivinationRiskControl({
@@ -841,8 +855,9 @@ function consumeXiaoLiuRenQuota({
   sceneType = 'decision',
   eventContext,
   clientMeta = null,
+  chart = null,
 }) {
-  const identityKey = resolveUsageIdentity({ userKey, clientMeta });
+  const identityKey = resolveUsageIdentity({ userKey, clientMeta, chart });
   const chinaDateTime = `${eventContext?.eventDateTime || ''}`.trim();
   if (!identityKey || !chinaDateTime) {
     return buildDivinationRiskControl({
