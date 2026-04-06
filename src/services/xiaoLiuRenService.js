@@ -879,7 +879,7 @@ function consumeXiaoLiuRenQuota({
     const latestTime = new Date(latestUsage.requested_at);
     const cooldownUntilDate = new Date(latestTime.getTime() + limits.cooldownMinutes * 60 * 1000);
     if (Date.parse(chinaDateTime) < cooldownUntilDate.getTime()) {
-      const error = new Error('卦不轻启，请二个时辰后再问');
+      const error = new Error('卦不轻起，请贰个时辰后再起');
       error.status = 429;
       error.code = 'DIVINATION_COOLDOWN';
       error.riskControl = buildDivinationRiskControl({
@@ -900,7 +900,7 @@ function consumeXiaoLiuRenQuota({
     const error = new Error(
       limits.normalizedTier === 'member'
         ? '今日明己一卦次数已用完，请明日再来。'
-        : '今日明己一卦次数已用完，开通会员后每天可用六次。'
+        : '今日明己一卦次数已用完，请注册会员，解锁更多功能。'
     );
     error.status = 429;
     error.code = 'DIVINATION_DAILY_LIMIT';
