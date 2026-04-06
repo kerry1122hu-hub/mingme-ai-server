@@ -6,7 +6,7 @@ const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { saveContactMessage } = require('../services/contactMessageService');
-const { runXiaoLiuRenEngine } = require('../services/xiaoLiuRenService');
+const { runXiaoLiuRenEngine, consumeXiaoLiuRenQuota } = require('../services/xiaoLiuRenService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
 
@@ -127,6 +127,23 @@ router.post('/xiao-liu-ren', async (req, res) => {
       module: `${module || 'mingji_one_gua'}`.trim() || 'mingji_one_gua',
     });
 
+    const riskControl = consumeXiaoLiuRenQuota({
+      userKey,
+      memberTier: `${memberTier || 'free'}`.trim() || 'free',
+      engineVersion: resolvedEngineVersion,
+      mode: `${mode || 'current'}`.trim() || 'current',
+      sceneType: engineResult.sceneType,
+      eventContext: engineResult.eventContext,
+      clientMeta: client_meta || null,
+    });
+
+    if (engineResult?.normalizedPayload) {
+      engineResult.normalizedPayload.risk_control = {
+        ...engineResult.normalizedPayload.risk_control,
+        ...riskControl,
+      };
+    }
+
     const text = await runXiaoLiuRenReading({
       question: `${question || ''}`.trim(),
       chart,
@@ -137,10 +154,13 @@ router.post('/xiao-liu-ren', async (req, res) => {
     });
 
     res.locals.outputLength = `${text || ''}`.length;
-    return res.json(ok({ text, engineResult }));
+    return res.json(ok({ text, engineResult, riskControl }));
   } catch (error) {
     res.locals.outputLength = 0;
     const status = error.status || 500;
+    if (error.code === 'DIVINATION_COOLDOWN' || error.code === 'DIVINATION_DAILY_LIMIT') {
+      return res.status(status).json(fail(error.message || 'server error', error.code, { riskControl: error.riskControl || null }));
+    }
     return res.status(status).json(fail(error.message || 'server error', 'SERVER_ERROR'));
   }
 });

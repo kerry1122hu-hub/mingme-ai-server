@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const { Solar } = require('lunar-typescript');
 
 const IS_RENDER = Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL);
+const DIVINATION_TIMEZONE = 'Asia/Shanghai';
 
 function resolveDataDir() {
   const customDataDir = `${process.env.MINGME_DATA_DIR || ''}`.trim();
@@ -339,6 +340,26 @@ function ensureDatabase() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(engine_version, mode)
     );
+
+    CREATE TABLE IF NOT EXISTS xiao_liu_ren_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      identity_key TEXT NOT NULL,
+      user_key TEXT,
+      member_tier TEXT NOT NULL,
+      engine_version TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      scene_type TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      slot_key TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_xlr_usage_identity_time
+    ON xiao_liu_ren_usage(identity_key, requested_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_xlr_usage_identity_date
+    ON xiao_liu_ren_usage(identity_key, date_key);
   `);
 
   return db;
@@ -500,17 +521,47 @@ function detectSceneType(question = '', preferredScene = '') {
   return 'decision';
 }
 
-function buildClientDate(eventDateTime, timezoneOffsetMinutes) {
+function resolveSourceDate(eventDateTime) {
   const base = eventDateTime ? new Date(eventDateTime) : new Date();
-  if (Number.isNaN(base.getTime())) return new Date();
-  const offsetMinutes = Number.isFinite(Number(timezoneOffsetMinutes))
-    ? Number(timezoneOffsetMinutes)
-    : -base.getTimezoneOffset();
-  return new Date(base.getTime() + offsetMinutes * 60 * 1000);
+  return Number.isNaN(base.getTime()) ? new Date() : base;
 }
 
-function getTimeBranch(date) {
-  const hour = date.getUTCHours();
+function buildChinaDateParts(eventDateTime) {
+  const sourceDate = resolveSourceDate(eventDateTime);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: DIVINATION_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = {};
+  for (const item of formatter.formatToParts(sourceDate)) {
+    if (item.type !== 'literal') {
+      parts[item.type] = item.value;
+    }
+  }
+  return {
+    sourceDate,
+    timezone: DIVINATION_TIMEZONE,
+    year: Number(parts.year || 0),
+    month: Number(parts.month || 0),
+    day: Number(parts.day || 0),
+    hour: Number(parts.hour || 0),
+    minute: Number(parts.minute || 0),
+    second: Number(parts.second || 0),
+  };
+}
+
+function buildChinaIsoString(chinaParts) {
+  const pad = (value) => `${value || 0}`.padStart(2, '0');
+  return `${chinaParts.year}-${pad(chinaParts.month)}-${pad(chinaParts.day)}T${pad(chinaParts.hour)}:${pad(chinaParts.minute)}:${pad(chinaParts.second)}+08:00`;
+}
+
+function getTimeBranch(hour) {
   if (hour === 23 || hour < 1) return TIME_BRANCHES[0];
   return TIME_BRANCHES.find((item) => hour >= item.start && hour < item.end) || TIME_BRANCHES[0];
 }
@@ -671,14 +722,15 @@ function normalizeChartCluesSafe(chart = {}) {
   return concerns.join('｜');
 }
 
-function buildLunarContext(localDate) {
-  const year = localDate.getUTCFullYear();
-  const month = localDate.getUTCMonth() + 1;
-  const day = localDate.getUTCDate();
-  const hour = localDate.getUTCHours();
-  const minute = localDate.getUTCMinutes();
-  const second = localDate.getUTCSeconds();
-  const solar = Solar.fromYmdHms(year, month, day, hour, minute, second);
+function buildLunarContext(chinaParts) {
+  const solar = Solar.fromYmdHms(
+    chinaParts.year,
+    chinaParts.month,
+    chinaParts.day,
+    chinaParts.hour,
+    chinaParts.minute,
+    chinaParts.second
+  );
   const lunar = solar.getLunar();
   return {
     solar,
@@ -694,16 +746,23 @@ function createRequestId() {
   return `req_${stamp}_${rand}`;
 }
 
-function buildDatetimeSlot(localDate, mode = 'current') {
-  const year = localDate.getUTCFullYear();
-  const month = `${localDate.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${localDate.getUTCDate()}`.padStart(2, '0');
+function buildDatetimeSlot(chinaParts, mode = 'current') {
+  const year = chinaParts.year;
+  const month = `${chinaParts.month}`.padStart(2, '0');
+  const day = `${chinaParts.day}`.padStart(2, '0');
   if (mode === 'event') {
-    const hour = `${localDate.getUTCHours()}`.padStart(2, '0');
+    const hour = `${chinaParts.hour}`.padStart(2, '0');
     return `${year}-${month}-${day}T${hour}`;
   }
-  const hour = `${localDate.getUTCHours()}`.padStart(2, '0');
+  const hour = `${chinaParts.hour}`.padStart(2, '0');
   return `${year}-${month}-${day}T${hour}`;
+}
+
+function buildChinaDateKey(chinaParts) {
+  const year = chinaParts.year;
+  const month = `${chinaParts.month}`.padStart(2, '0');
+  const day = `${chinaParts.day}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function calculateRawIndex(month, day, timeNumber) {
@@ -714,6 +773,179 @@ function calculateRawIndex(month, day, timeNumber) {
 function calculateSecondaryIndex(day, timeNumber) {
   const raw = (Number(day) + Number(timeNumber) - 2) % 6;
   return raw < 0 ? raw + 6 : raw;
+}
+
+function normalizeDivinationTier(memberTier = '') {
+  const tier = `${memberTier || ''}`.trim().toLowerCase();
+  if (!tier) return 'free';
+  if (['member', 'premium', 'vip', 'paid', 'monthly', 'annual'].includes(tier)) return 'member';
+  if (tier.includes('member') || tier.includes('premium') || tier.includes('vip') || tier.includes('annual') || tier.includes('month')) {
+    return 'member';
+  }
+  return 'free';
+}
+
+function getDivinationLimits(memberTier = '') {
+  const normalizedTier = normalizeDivinationTier(memberTier);
+  if (normalizedTier === 'member') {
+    return {
+      normalizedTier,
+      dailyLimit: 6,
+      cooldownMinutes: 240,
+    };
+  }
+  return {
+    normalizedTier,
+    dailyLimit: 1,
+    cooldownMinutes: 240,
+  };
+}
+
+function resolveUsageIdentity({ userKey, clientMeta } = {}) {
+  const userIdentity = `${userKey || ''}`.trim();
+  if (userIdentity) return userIdentity;
+  const clientUserId = `${clientMeta?.user_id || ''}`.trim();
+  if (clientUserId) return clientUserId;
+  const deviceId = `${clientMeta?.device_id || ''}`.trim();
+  if (deviceId) return deviceId;
+  return '';
+}
+
+function buildDivinationRiskControl({
+  identityKey,
+  engineVersion,
+  mode,
+  sceneType,
+  chinaParts,
+  dailyUsageCount,
+  cooldownUntil,
+  status = 'ok',
+}) {
+  return {
+    is_cached: false,
+    cache_key: identityKey
+      ? `mingji_one_gua:${engineVersion}:${identityKey}:${mode}:${sceneType}:${buildDatetimeSlot(chinaParts, mode)}`
+      : null,
+    cooldown_until: cooldownUntil || null,
+    daily_usage_count: dailyUsageCount,
+    hourly_usage_count: null,
+    status,
+  };
+}
+
+function consumeXiaoLiuRenQuota({
+  userKey,
+  memberTier,
+  engineVersion = 'v1.1',
+  mode = 'current',
+  sceneType = 'decision',
+  eventContext,
+  clientMeta = null,
+}) {
+  const identityKey = resolveUsageIdentity({ userKey, clientMeta });
+  const chinaDateTime = `${eventContext?.eventDateTime || ''}`.trim();
+  if (!identityKey || !chinaDateTime) {
+    return buildDivinationRiskControl({
+      identityKey,
+      engineVersion,
+      mode,
+      sceneType,
+      chinaParts: buildChinaDateParts(chinaDateTime),
+      dailyUsageCount: null,
+      cooldownUntil: null,
+      status: 'ok',
+    });
+  }
+
+  const chinaParts = buildChinaDateParts(chinaDateTime);
+  const dateKey = buildChinaDateKey(chinaParts);
+  const slotKey = buildDatetimeSlot(chinaParts, mode);
+  const limits = getDivinationLimits(memberTier);
+  const latestUsage = db.prepare(`
+    SELECT requested_at
+    FROM xiao_liu_ren_usage
+    WHERE identity_key = ?
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).get(identityKey);
+
+  const dailyUsageCount = Number(db.prepare(`
+    SELECT COUNT(1) AS count
+    FROM xiao_liu_ren_usage
+    WHERE identity_key = ? AND date_key = ?
+  `).get(identityKey, dateKey)?.count || 0);
+
+  if (latestUsage?.requested_at) {
+    const latestTime = new Date(latestUsage.requested_at);
+    const cooldownUntilDate = new Date(latestTime.getTime() + limits.cooldownMinutes * 60 * 1000);
+    if (Date.parse(chinaDateTime) < cooldownUntilDate.getTime()) {
+      const error = new Error('卦不轻启，请二个时辰后再问');
+      error.status = 429;
+      error.code = 'DIVINATION_COOLDOWN';
+      error.riskControl = buildDivinationRiskControl({
+        identityKey,
+        engineVersion,
+        mode,
+        sceneType,
+        chinaParts,
+        dailyUsageCount,
+        cooldownUntil: cooldownUntilDate.toISOString(),
+        status: 'cooldown',
+      });
+      throw error;
+    }
+  }
+
+  if (dailyUsageCount >= limits.dailyLimit) {
+    const error = new Error(
+      limits.normalizedTier === 'member'
+        ? '今日明己一卦次数已用完，请明日再来。'
+        : '今日明己一卦次数已用完，开通会员后每天可用六次。'
+    );
+    error.status = 429;
+    error.code = 'DIVINATION_DAILY_LIMIT';
+    error.riskControl = buildDivinationRiskControl({
+      identityKey,
+      engineVersion,
+      mode,
+      sceneType,
+      chinaParts,
+      dailyUsageCount,
+      cooldownUntil: null,
+      status: 'locked',
+    });
+    throw error;
+  }
+
+  db.prepare(`
+    INSERT INTO xiao_liu_ren_usage (
+      identity_key, user_key, member_tier, engine_version, mode, scene_type,
+      requested_at, date_key, slot_key
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    identityKey,
+    `${userKey || ''}`.trim() || null,
+    limits.normalizedTier,
+    engineVersion,
+    mode,
+    sceneType,
+    chinaDateTime,
+    dateKey,
+    slotKey
+  );
+
+  const updatedDailyUsageCount = dailyUsageCount + 1;
+  const cooldownUntilDate = new Date(Date.parse(chinaDateTime) + limits.cooldownMinutes * 60 * 1000);
+  return buildDivinationRiskControl({
+    identityKey,
+    engineVersion,
+    mode,
+    sceneType,
+    chinaParts,
+    dailyUsageCount: updatedDailyUsageCount,
+    cooldownUntil: cooldownUntilDate.toISOString(),
+    status: 'ok',
+  });
 }
 
 function normalizeChartClues(chart = {}) {
@@ -746,18 +978,18 @@ function runXiaoLiuRenEngine({
   chart,
   mode = 'current',
   eventDateTime,
-  timezoneOffsetMinutes,
   engineVersion = 'v1.1',
-  timezone = 'Asia/Shanghai',
+  timezone = DIVINATION_TIMEZONE,
   clientMeta = null,
   module = 'mingji_one_gua',
 }) {
   const resolvedSceneType = detectSceneType(question, sceneType);
-  const localDate = buildClientDate(eventDateTime, timezoneOffsetMinutes);
-  const lunarContext = buildLunarContext(localDate);
+  const chinaParts = buildChinaDateParts(eventDateTime);
+  const chinaDateTime = buildChinaIsoString(chinaParts);
+  const lunarContext = buildLunarContext(chinaParts);
   const localMonth = lunarContext.lunarMonth;
   const localDay = lunarContext.lunarDay;
-  const timeBranch = getTimeBranch(localDate);
+  const timeBranch = getTimeBranch(chinaParts.hour);
   const config = getEngineConfig(engineVersion);
   const mainRawIndex = calculateRawIndex(localMonth, localDay, timeBranch.num);
   const secondaryRawIndex = calculateSecondaryIndex(localDay, timeBranch.num);
@@ -782,9 +1014,9 @@ function runXiaoLiuRenEngine({
   `).get(engineVersion, mode);
 
   const requestId = createRequestId();
-  const timestamp = localDate.toISOString();
+  const timestamp = new Date().toISOString();
   const cacheKey = clientMeta?.user_id
-    ? `${module}:${engineVersion}:${clientMeta.user_id}:${mode}:${resolvedSceneType}:${buildDatetimeSlot(localDate, mode)}`
+    ? `${module}:${engineVersion}:${clientMeta.user_id}:${mode}:${resolvedSceneType}:${buildDatetimeSlot(chinaParts, mode)}`
     : null;
 
   const normalizedResult = {
@@ -807,8 +1039,8 @@ function runXiaoLiuRenEngine({
     request_id: requestId,
     timestamp,
     query_context: {
-      timezone,
-      datetime: eventDateTime || timestamp,
+      timezone: DIVINATION_TIMEZONE,
+      datetime: eventDateTime || chinaDateTime,
     },
     calc_context: {
       lunar_month: localMonth,
@@ -850,10 +1082,11 @@ function runXiaoLiuRenEngine({
     eventContext: {
       localMonth,
       localDay,
-      localHour: localDate.getUTCHours(),
+      localHour: chinaParts.hour,
       timeBranch: timeBranch.branch,
       timeBranchNumber: timeBranch.num,
-      eventDateTime: localDate.toISOString(),
+      eventDateTime: chinaDateTime,
+      timezoneUsed: DIVINATION_TIMEZONE,
     },
     mainPalace,
     secondaryPalace,
@@ -879,5 +1112,6 @@ function runXiaoLiuRenEngine({
 }
 
 module.exports = {
+  consumeXiaoLiuRenQuota,
   runXiaoLiuRenEngine,
 };
