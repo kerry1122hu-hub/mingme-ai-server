@@ -18,6 +18,10 @@ const { listManualPaymentReviews, approveManualPaymentReview } = require('../ser
 const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
 const { listContactMessages } = require('../services/contactMessageService');
 const {
+  getXiaoLiuRenMemoryAdmin,
+  listXiaoLiuRenUsage,
+} = require('../services/xiaoLiuRenService');
+const {
   clearAdminSessionCookie,
   getAdminUsername,
   isAdminAuthenticated,
@@ -122,6 +126,32 @@ router.get('/api/member-memories', (req, res) => {
     const items = listMemberMemories({ limit: req.query?.limit || 100 });
     res.locals.outputLength = JSON.stringify(items).length;
     return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/divination-usage', (req, res) => {
+  try {
+    const items = listXiaoLiuRenUsage({ limit: req.query?.limit || 100 });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/api/divination-memory', (req, res) => {
+  try {
+    const { userKey, chart } = req.body || {};
+    if (!userKey && !chart) {
+      return res.status(400).json(fail('userKey or chart is required', 'BAD_REQUEST'));
+    }
+    const memory = getXiaoLiuRenMemoryAdmin({ userKey, chart, limit: req.body?.limit || 20 });
+    res.locals.outputLength = JSON.stringify(memory).length;
+    return res.json(ok({ memory }));
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
@@ -252,6 +282,7 @@ router.post('/api/member-memory', (req, res) => {
       return res.status(400).json(fail('userKey or chart is required', 'BAD_REQUEST'));
     }
     const memory = getMemberMemoryAdmin({ userKey, chart });
+    memory.divinationMemory = getXiaoLiuRenMemoryAdmin({ userKey, chart, limit: 12 });
     res.locals.outputLength = JSON.stringify(memory).length;
     return res.json(ok({ memory }));
   } catch (error) {
@@ -373,7 +404,7 @@ router.get('/ai-usage', (req, res) => {
       <div class="hero-top">
         <div>
           <h1>MingMe AI 管理后台</h1>
-          <div class="sub">这里可以查看今日 AI 使用情况、会员状态、额外次数、会员记忆，以及人工付款审核与已开通记录。</div>
+          <div class="sub">这里可以查看今日 AI 使用情况、会员状态、额外次数、会员记忆、明己一卦使用记录，以及人工付款审核与已开通记录。</div>
         </div>
         <div style="display:grid; gap:10px; justify-items:end;">
           <div class="admin-badge">当前管理员：${adminName}</div>
@@ -501,6 +532,32 @@ router.get('/ai-usage', (req, res) => {
           <tbody id="memoryBody"></tbody>
         </table>
 
+        <h2 style="margin-top:20px;">明己一卦记录查看区</h2>
+        <div class="form">
+          <input id="divinationUserKey" placeholder="输入 userKey，查看这位用户起过哪些卦、问了什么事" />
+          <button id="loadDivinationBtn">查看明己一卦记录</button>
+          <div class="status" id="divinationStatus"></div>
+        </div>
+        <div id="divinationDetail" class="memory-panel muted">先输入 userKey，再查看这位用户的起卦历史、主辅宫和每次所问之事。</div>
+
+        <h2 style="margin-top:20px;">最近明己一卦使用记录</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="divinationSearch" placeholder="搜索 userKey / 场景 / 问题 / 宫位 / 短断" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>起卦时间</th>
+              <th>用户</th>
+              <th>场景 / 身份</th>
+              <th>所问之事</th>
+              <th>主宫 / 辅宫</th>
+              <th>短断</th>
+            </tr>
+          </thead>
+          <tbody id="divinationBody"></tbody>
+        </table>
+
         <h2 style="margin-top:20px;">付费意向看板</h2>
         <div class="storage-grid" style="margin-top:12px; margin-bottom:12px;">
           <div class="storage-card">
@@ -602,6 +659,8 @@ router.get('/ai-usage', (req, res) => {
     const membershipGroupFilter = document.getElementById('membershipGroupFilter');
     const memoryBody = document.getElementById('memoryBody');
     const memorySearch = document.getElementById('memorySearch');
+    const divinationBody = document.getElementById('divinationBody');
+    const divinationSearch = document.getElementById('divinationSearch');
     const leadBody = document.getElementById('leadBody');
     const contactMessageBody = document.getElementById('contactMessageBody');
     const contactMessageSearch = document.getElementById('contactMessageSearch');
@@ -622,9 +681,12 @@ router.get('/ai-usage', (req, res) => {
     const quotaStatus = document.getElementById('quotaStatus');
     const memoryStatus = document.getElementById('memoryStatus');
     const memoryDetail = document.getElementById('memoryDetail');
+    const divinationStatus = document.getElementById('divinationStatus');
+    const divinationDetail = document.getElementById('divinationDetail');
     let latestMembershipItems = [];
     let expandedMembershipRows = {};
     let latestMemoryItems = [];
+    let latestDivinationItems = [];
     let latestLeadItems = [];
     let latestContactMessageItems = [];
     let latestManualPaymentItems = [];
@@ -950,6 +1012,46 @@ router.get('/ai-usage', (req, res) => {
         : '<tr><td colspan="5" class="muted">还没有符合条件的会员记忆记录。</td></tr>';
     }
 
+    function getFilteredDivinations(items) {
+      const keyword = String(divinationSearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const searchBase = [
+          item.userKey,
+          item.identityLabel,
+          item.sceneType,
+          item.questionText,
+          item.mainPalaceName,
+          item.secondaryPalaceName,
+          item.shortOutput,
+          item.likelyConcern,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
+    function renderDivinationList(items) {
+      latestDivinationItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredDivinations(latestDivinationItems);
+      divinationBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const palaceText = item.secondaryPalaceName
+            ? (item.mainPalaceName || '--') + ' / ' + item.secondaryPalaceName
+            : (item.mainPalaceName || '--');
+          const sceneLabel = item.sceneType || 'decision';
+          const tierLabel = item.memberTier === 'member' ? '会员' : '非会员';
+          return '<tr>'
+            + '<td>' + (item.requestedAt || '--') + '</td>'
+            + '<td><span class="mono">' + (item.userKey || item.identityLabel || '--') + '</span></td>'
+            + '<td>' + sceneLabel + '<div class="muted">' + tierLabel + '</div></td>'
+            + '<td>' + (item.questionText || item.eventTitle || '未留问题') + '</td>'
+            + '<td>' + palaceText + '<div class="muted">' + (item.fortuneLevel || '未定级') + '</div></td>'
+            + '<td>' + (item.shortOutput || item.oneLineSummary || '暂无') + '</td>'
+            + '</tr>';
+        }).join('')
+        : '<tr><td colspan="6" class="muted">还没有明己一卦使用记录。</td></tr>';
+    }
+
     function renderMemoryDetail(memory) {
       const profile = memory.userProfile || {};
       const focus = joinText(memory.profileMemory?.longTermFocus, '未形成');
@@ -967,6 +1069,7 @@ router.get('/ai-usage', (req, res) => {
       const longTermPatterns = Array.isArray(memory.longTermPatterns) ? memory.longTermPatterns : [];
       const pendingActions = Array.isArray(memory.actionTracker?.pendingActions) ? memory.actionTracker.pendingActions : [];
       const recentActions = Array.isArray(memory.actionTracker?.recentActions) ? memory.actionTracker.recentActions : [];
+      const divinationItems = Array.isArray(memory.divinationMemory?.items) ? memory.divinationMemory.items : [];
 
       const profileHtml = [
         '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
@@ -1024,6 +1127,18 @@ router.get('/ai-usage', (req, res) => {
           ].join('')
         : '<div class="memory-line muted">动作追踪还没有积累记录。</div>';
 
+      const divinationHtml = divinationItems.length
+        ? divinationItems.map((item) => (
+          '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">'
+            + '<div class="muted" style="margin-bottom:4px;">' + (item.requestedAt || '--') + ' / ' + (item.sceneType || 'decision') + ' / ' + (item.memberTier === 'member' ? '会员' : '非会员') + '</div>'
+            + '<div><strong>所问之事：</strong>' + (item.questionText || item.eventTitle || '未留问题') + '</div>'
+            + '<div style="margin-top:4px;"><strong>主辅宫：</strong>' + ((item.mainPalaceName || '--') + (item.secondaryPalaceName ? ' / ' + item.secondaryPalaceName : '')) + '</div>'
+            + '<div style="margin-top:4px;"><strong>短断：</strong>' + (item.shortOutput || item.oneLineSummary || '暂无') + '</div>'
+            + (item.likelyConcern ? '<div class="muted" style="margin-top:4px;"><strong>更可能真正想问：</strong>' + item.likelyConcern + '</div>' : '')
+          + '</div>'
+        )).join('')
+        : '<div class="memory-line muted">这位用户还没有明己一卦记录。</div>';
+
       memoryDetail.innerHTML = [
         '<div style="display:grid;gap:14px;">',
           '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
@@ -1048,6 +1163,12 @@ router.get('/ai-usage', (req, res) => {
             '<div class="memory-line"><strong>上次给的动作：</strong>' + (memory.sessionMemory?.lastActionGiven || '暂无') + '</div>',
             '<div class="memory-line"><strong>上次未完结点：</strong>' + (memory.sessionMemory?.lastOpenLoop || '暂无') + '</div>',
             '<div style="margin-top:10px;">' + actionHtml + '</div>',
+          '</div>',
+          '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+            '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">五、明己一卦记录</div>',
+            '<div class="memory-line"><strong>最近起卦：</strong>' + (memory.divinationMemory?.latestRequestedAt || '暂无') + '</div>',
+            '<div class="memory-line"><strong>最近短断：</strong>' + (memory.divinationMemory?.latestShortOutput || '暂无') + '</div>',
+            '<div style="margin-top:10px;">' + divinationHtml + '</div>',
           '</div>',
         '</div>',
       ].join('');
@@ -1234,10 +1355,11 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
+        const [usage, memberships, memories, divinations, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
+          requestJson('/admin/api/divination-usage'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
           requestJson('/admin/api/contact-messages'),
@@ -1247,6 +1369,7 @@ router.get('/ai-usage', (req, res) => {
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
         renderMemoryList(memories.items || []);
+        renderDivinationList(divinations.items || []);
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
         renderContactMessages(contactMessages.items || []);
@@ -1325,17 +1448,65 @@ router.get('/ai-usage', (req, res) => {
       }
     }
 
+    async function loadDivinationMemory() {
+      divinationStatus.textContent = '正在读取明己一卦记录...';
+      try {
+        const payload = {
+          userKey: document.getElementById('divinationUserKey').value.trim(),
+        };
+        if (!payload.userKey) {
+          throw new Error('请先输入 userKey');
+        }
+        const result = await requestJson('/admin/api/divination-memory', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        const memory = result.memory || {};
+        const items = Array.isArray(memory.items) ? memory.items : [];
+        divinationDetail.innerHTML = items.length
+          ? [
+              '<div style="display:grid;gap:14px;">',
+                '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+                  '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">明己一卦记录概览</div>',
+                  '<div class="memory-line"><strong>用户键：</strong><span class="mono">' + (memory.userKey || '--') + '</span></div>',
+                  '<div class="memory-line"><strong>累计起卦：</strong>' + (memory.totalCount || 0) + ' 次</div>',
+                  '<div class="memory-line"><strong>最近起卦：</strong>' + (memory.latestRequestedAt || '暂无') + '</div>',
+                  '<div class="memory-line"><strong>最近短断：</strong>' + (memory.latestShortOutput || '暂无') + '</div>',
+                '</div>',
+                '<div style="padding:14px;border-radius:16px;background:rgba(245,251,249,0.92);border:1px solid rgba(117,170,160,0.18);">',
+                  '<div style="font-size:15px;font-weight:800;margin-bottom:10px;">起卦历史</div>',
+                  items.map((item) => (
+                    '<div class="memory-line" style="padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(117,170,160,0.18);">'
+                      + '<div class="muted" style="margin-bottom:4px;">' + (item.requestedAt || '--') + ' / ' + (item.sceneType || 'decision') + ' / ' + (item.memberTier === 'member' ? '会员' : '非会员') + '</div>'
+                      + '<div><strong>所问之事：</strong>' + (item.questionText || item.eventTitle || '未留问题') + '</div>'
+                      + '<div style="margin-top:4px;"><strong>主辅宫：</strong>' + ((item.mainPalaceName || '--') + (item.secondaryPalaceName ? ' / ' + item.secondaryPalaceName : '')) + '</div>'
+                      + '<div style="margin-top:4px;"><strong>短断：</strong>' + (item.shortOutput || item.oneLineSummary || '暂无') + '</div>'
+                      + (item.likelyConcern ? '<div class="muted" style="margin-top:4px;"><strong>更可能真正想问：</strong>' + item.likelyConcern + '</div>' : '')
+                    + '</div>'
+                  )).join(''),
+                '</div>',
+              '</div>',
+            ].join('')
+          : '<div class="memory-line muted">这位用户还没有明己一卦记录。</div>';
+        divinationStatus.textContent = '明己一卦记录已加载。';
+      } catch (error) {
+        divinationStatus.textContent = '读取失败：' + error.message;
+      }
+    }
+
     enhanceAdminAccordionLayout();
     document.getElementById('reloadBtn').addEventListener('click', loadOverview);
     document.getElementById('saveBtn').addEventListener('click', saveMembership);
     document.getElementById('saveQuotaBtn').addEventListener('click', saveExtraQuota);
     document.getElementById('loadMemoryBtn').addEventListener('click', loadMemberMemory);
+    document.getElementById('loadDivinationBtn').addEventListener('click', loadDivinationMemory);
     membershipSearch.addEventListener('input', () => renderMemberships(latestMembershipItems));
     membershipGroupFilter.addEventListener('change', () => renderMemberships(latestMembershipItems));
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     contactMessageSearch.addEventListener('input', () => renderContactMessages(latestContactMessageItems));
     memorySearch.addEventListener('input', () => renderMemoryList(latestMemoryItems));
+    divinationSearch.addEventListener('input', () => renderDivinationList(latestDivinationItems));
     approvedPaymentSearch.addEventListener('input', () => renderApprovedPaymentReviews(latestApprovedPaymentItems));
     document.addEventListener('click', (event) => {
       const sectionTarget = event.target?.getAttribute?.('data-section-target');

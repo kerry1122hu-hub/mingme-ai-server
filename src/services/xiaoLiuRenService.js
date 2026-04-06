@@ -362,7 +362,32 @@ function ensureDatabase() {
     ON xiao_liu_ren_usage(identity_key, date_key);
   `);
 
+  ensureUsageSchema(db);
+
   return db;
+}
+
+function ensureUsageColumn(dbInstance, columnName, sqlDefinition) {
+  const columns = dbInstance.prepare(`PRAGMA table_info(xiao_liu_ren_usage)`).all();
+  const exists = columns.some((column) => column.name === columnName);
+  if (!exists) {
+    dbInstance.exec(`ALTER TABLE xiao_liu_ren_usage ADD COLUMN ${columnName} ${sqlDefinition}`);
+  }
+}
+
+function ensureUsageSchema(dbInstance) {
+  ensureUsageColumn(dbInstance, 'question_text', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'event_title', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'event_note', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'main_palace_code', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'main_palace_name', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'secondary_palace_code', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'secondary_palace_name', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'fortune_level', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'short_output', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'one_line_summary', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'likely_concern', "TEXT NOT NULL DEFAULT ''");
+  ensureUsageColumn(dbInstance, 'identity_label', "TEXT NOT NULL DEFAULT ''");
 }
 
 const db = ensureDatabase();
@@ -825,6 +850,13 @@ function resolveUsageIdentity({ userKey, clientMeta, chart } = {}) {
   return buildChartIdentity(chart);
 }
 
+function buildIdentityLabel({ userKey, chart } = {}) {
+  const direct = `${userKey || ''}`.trim();
+  if (direct) return direct;
+  const chartIdentity = buildChartIdentity(chart);
+  return chartIdentity || '';
+}
+
 function buildDivinationRiskControl({
   identityKey,
   engineVersion,
@@ -856,6 +888,8 @@ function consumeXiaoLiuRenQuota({
   eventContext,
   clientMeta = null,
   chart = null,
+  question = '',
+  engineResult = null,
 }) {
   const identityKey = resolveUsageIdentity({ userKey, clientMeta, chart });
   const chinaDateTime = `${eventContext?.eventDateTime || ''}`.trim();
@@ -935,8 +969,10 @@ function consumeXiaoLiuRenQuota({
   db.prepare(`
     INSERT INTO xiao_liu_ren_usage (
       identity_key, user_key, member_tier, engine_version, mode, scene_type,
-      requested_at, date_key, slot_key
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      requested_at, date_key, slot_key, question_text, event_title, event_note,
+      main_palace_code, main_palace_name, secondary_palace_code, secondary_palace_name,
+      fortune_level, short_output, one_line_summary, likely_concern, identity_label
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     identityKey,
     `${userKey || ''}`.trim() || null,
@@ -946,7 +982,19 @@ function consumeXiaoLiuRenQuota({
     sceneType,
     chinaDateTime,
     dateKey,
-    slotKey
+    slotKey,
+    `${question || ''}`.trim(),
+    `${eventContext?.eventTitle || ''}`.trim(),
+    `${eventContext?.eventNote || ''}`.trim(),
+    `${engineResult?.mainPalace?.palace_code || ''}`.trim(),
+    `${engineResult?.mainPalace?.palace_name || ''}`.trim(),
+    `${engineResult?.secondaryPalace?.palace_code || ''}`.trim(),
+    `${engineResult?.secondaryPalace?.palace_name || ''}`.trim(),
+    `${engineResult?.sceneStandardPacket?.fortune_level || engineResult?.mainPalace?.fortune_level || ''}`.trim(),
+    `${engineResult?.sceneStandardPacket?.short_output || engineResult?.summary || ''}`.trim(),
+    `${engineResult?.mainPalace?.summary || ''}`.trim(),
+    `${engineResult?.likelyConcern || ''}`.trim(),
+    buildIdentityLabel({ userKey, chart })
   );
 
   const updatedDailyUsageCount = dailyUsageCount + 1;
@@ -961,6 +1009,66 @@ function consumeXiaoLiuRenQuota({
     cooldownUntil: cooldownUntilDate.toISOString(),
     status: 'ok',
   });
+}
+
+function mapUsageRow(row = {}) {
+  return {
+    id: row.id,
+    identityKey: row.identity_key || '',
+    identityLabel: row.identity_label || row.user_key || row.identity_key || '',
+    userKey: row.user_key || '',
+    memberTier: row.member_tier || 'free',
+    engineVersion: row.engine_version || '',
+    mode: row.mode || 'current',
+    sceneType: row.scene_type || 'decision',
+    requestedAt: row.requested_at || row.created_at || '',
+    dateKey: row.date_key || '',
+    slotKey: row.slot_key || '',
+    questionText: row.question_text || '',
+    eventTitle: row.event_title || '',
+    eventNote: row.event_note || '',
+    mainPalaceCode: row.main_palace_code || '',
+    mainPalaceName: row.main_palace_name || '',
+    secondaryPalaceCode: row.secondary_palace_code || '',
+    secondaryPalaceName: row.secondary_palace_name || '',
+    fortuneLevel: row.fortune_level || '',
+    shortOutput: row.short_output || '',
+    oneLineSummary: row.one_line_summary || '',
+    likelyConcern: row.likely_concern || '',
+  };
+}
+
+function listXiaoLiuRenUsage({ limit = 100 } = {}) {
+  const rows = db.prepare(`
+    SELECT *
+    FROM xiao_liu_ren_usage
+    ORDER BY requested_at DESC, id DESC
+    LIMIT ?
+  `).all(Number(limit) || 100);
+  return rows.map(mapUsageRow);
+}
+
+function getXiaoLiuRenMemoryAdmin({ userKey, chart, limit = 20 } = {}) {
+  const identityKey = resolveUsageIdentity({ userKey, chart });
+  const directUserKey = `${userKey || ''}`.trim();
+  const rows = directUserKey || identityKey
+    ? db.prepare(`
+        SELECT *
+        FROM xiao_liu_ren_usage
+        WHERE (${directUserKey ? 'user_key = ? OR ' : ''}identity_key = ?)
+        ORDER BY requested_at DESC, id DESC
+        LIMIT ?
+      `).all(...(directUserKey ? [directUserKey, identityKey] : [identityKey]), Number(limit) || 20)
+    : [];
+
+  const items = rows.map(mapUsageRow);
+  return {
+    userKey: directUserKey || identityKey || '',
+    totalCount: items.length,
+    latestRequestedAt: items[0]?.requestedAt || '',
+    latestShortOutput: items[0]?.shortOutput || '',
+    items,
+  };
 }
 
 function normalizeChartClues(chart = {}) {
@@ -1128,5 +1236,7 @@ function runXiaoLiuRenEngine({
 
 module.exports = {
   consumeXiaoLiuRenQuota,
+  getXiaoLiuRenMemoryAdmin,
+  listXiaoLiuRenUsage,
   runXiaoLiuRenEngine,
 };

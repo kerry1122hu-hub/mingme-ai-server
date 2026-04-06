@@ -136,6 +136,8 @@ router.post('/xiao-liu-ren', async (req, res) => {
       eventContext: engineResult.eventContext,
       clientMeta: client_meta || null,
       chart,
+      question: `${question || ''}`.trim(),
+      engineResult,
     });
 
     if (engineResult?.normalizedPayload) {
