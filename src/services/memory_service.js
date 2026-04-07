@@ -772,6 +772,97 @@ function buildCompatibilityPreference(userProfile, legacyPreference) {
   };
 }
 
+function detectContextTopicType(text = '') {
+  const source = textOf(text);
+  if (/(感情|关系|婚姻|对象|伴侣|暧昧|复合|分手|冷战|沟通|边界)/.test(source)) return 'relationship';
+  if (/(钱|财|收入|回款|现金流|投资|成本|利润|交易|付款|签约)/.test(source)) return 'money';
+  if (/(焦虑|压力|情绪|失眠|崩溃|内耗|疲惫|很累|撑不住)/.test(source)) return 'emotion';
+  if (/(健康|出行|身体|生病|恢复|拜访|见面|路上)/.test(source)) return 'health';
+  return 'career';
+}
+
+function scoreTextOverlap(text = '', query = '') {
+  const baseText = textOf(text);
+  const baseQuery = textOf(query);
+  if (!baseText || !baseQuery) return 0;
+  const tokens = [...new Set(baseQuery.match(/[\u4e00-\u9fa5]{1,2}|[a-zA-Z0-9_]+/g) || [])]
+    .map((item) => item.trim())
+    .filter((item) => item && item.length >= 1);
+  return tokens.reduce((score, token) => (baseText.includes(token) ? score + (token.length >= 2 ? 2 : 1) : score), 0);
+}
+
+function selectRelevantRecentSessions(memory = {}, currentInput = '', topicType = '') {
+  const sessions = Array.isArray(memory.recentSessions) ? memory.recentSessions : [];
+  if (!sessions.length) return [];
+
+  return sessions
+    .map((item, index) => {
+      const sessionTopic = textOf(item?.topicType, 'general');
+      const topicScore = sessionTopic === topicType ? 12 : (topicType && sessionTopic !== 'general' ? -2 : 0);
+      const openLoopScore = item?.openLoop ? 5 : 0;
+      const issueOverlap = scoreTextOverlap(item?.userIssue, currentInput);
+      const judgmentOverlap = scoreTextOverlap(item?.aiJudgment, currentInput);
+      const actionOverlap = scoreTextOverlap(item?.aiAction, currentInput);
+      const recencyScore = Math.max(0, 6 - index);
+      const importanceScore = clampNumber(item?.importanceScore || 5, 1, 10, 5);
+      return {
+        item,
+        score: topicScore + openLoopScore + issueOverlap + judgmentOverlap + actionOverlap + recencyScore + importanceScore,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((entry) => entry.item);
+}
+
+function selectRelevantLongTermPattern(memory = {}, currentInput = '', topicType = '') {
+  const patterns = Array.isArray(memory.longTermPatterns) ? memory.longTermPatterns : [];
+  if (!patterns.length) return null;
+
+  return patterns
+    .map((item, index) => {
+      const patternTopic = textOf(item?.patternType, '');
+      const topicScore = patternTopic === topicType ? 12 : 0;
+      const overlapScore = scoreTextOverlap(`${item?.patternTitle || ''} ${item?.patternSummary || ''}`, currentInput);
+      const confidenceScore = clampNumber(item?.confidenceScore || 5, 1, 10, 5);
+      const evidenceScore = Math.min(8, Number(item?.evidenceCount || 0));
+      const recencyScore = Math.max(0, 4 - index);
+      return {
+        item,
+        score: topicScore + overlapScore + confidenceScore + evidenceScore + recencyScore,
+      };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.item || null;
+}
+
+function selectPendingAction(memory = {}, currentInput = '', topicType = '') {
+  const pending = Array.isArray(memory.actionTracker?.pendingActions) ? memory.actionTracker.pendingActions : [];
+  if (!pending.length) return null;
+
+  return pending
+    .map((item, index) => {
+      const actionTopic = textOf(item?.topicType, '');
+      const topicScore = actionTopic === topicType ? 10 : 0;
+      const overlapScore = scoreTextOverlap(`${item?.actionText || ''} ${item?.dueHint || ''}`, currentInput);
+      const recencyScore = Math.max(0, 4 - index);
+      return {
+        item,
+        score: topicScore + overlapScore + recencyScore,
+      };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.item || null;
+}
+
+function normalizeMemoryTopicType(value = '', currentInput = '') {
+  const raw = textOf(value).toLowerCase();
+  if (raw === 'wealth') return 'money';
+  if (raw === 'communication') return 'relationship';
+  if (raw === 'travel') return 'health';
+  if (raw === 'decision') return 'career';
+  if (raw === 'general' || !raw) return detectContextTopicType(currentInput);
+  return raw;
+}
+
 function upsertUserProfile(userId, { profile = {}, chart = {}, preferencePatch = {}, recentSession = {}, existingProfile = {} }) {
   const mergedPreferenceText = buildResponsePreferenceText({
     likesStrongConclusion: preferencePatch.likesStrongConclusion || /先给结论/.test(existingProfile.responsePreference || ''),
@@ -1240,6 +1331,52 @@ function buildMemberMemoryContext(memory = {}) {
   ].join('\n');
 }
 
+function buildMemberMemoryContextV2(memory = {}, options = {}) {
+  if (!memory?.enabled) return '';
+
+  const profile = memory.userProfile || {};
+  const currentInput = textOf(options.currentInput || options.userInput || options.question || '');
+  const topicType = normalizeMemoryTopicType(options.topicType, currentInput) || 'career';
+  const recentSessions = selectRelevantRecentSessions(memory, currentInput, topicType);
+  const longTermPattern = selectRelevantLongTermPattern(memory, currentInput, topicType);
+  const pendingAction = selectPendingAction(memory, currentInput, topicType);
+  const preferenceSummary = buildResponsePreferenceText(memory.responsePreference || {}) || textOf(profile.responsePreference, '尚在形成');
+
+  const recentBlock = recentSessions.length
+    ? recentSessions.map((item, index) => `${index + 1}. 问题：${item.userIssue || '暂无'}；判断：${item.aiJudgment || '暂无'}；动作：${item.aiAction || '暂无'}；未完结：${item.openLoop || '暂无'}`).join('\n')
+    : '暂无近期相关记忆。';
+
+  const patternBlock = longTermPattern
+    ? `1. ${longTermPattern.patternTitle}：${longTermPattern.patternSummary}`
+    : '暂无稳定长期模式。';
+
+  const actionBlock = pendingAction
+    ? `1. ${pendingAction.actionText}${pendingAction.dueHint ? `（建议时机：${pendingAction.dueHint}）` : ''}`
+    : '暂无待跟进动作。';
+
+  return [
+    '【会员专属记忆】',
+    `- 当前话题：${topicType}`,
+    `- 用户画像：${textOf(profile.baziSummary || profile.zodiacSummary || profile.decisionStyle, '尚在形成')}`,
+    `- 决策风格：${textOf(profile.decisionStyle, '尚在形成')}`,
+    `- 情绪模式：${textOf(profile.emotionPattern, '尚在形成')}`,
+    `- 关系模式：${textOf(profile.relationshipPattern, '尚在形成')}`,
+    `- 金钱模式：${textOf(profile.moneyPattern, '尚在形成')}`,
+    `- 回答偏好：${preferenceSummary}`,
+    '',
+    '【近期相关记忆】',
+    recentBlock,
+    '',
+    '【长期模式】',
+    patternBlock,
+    '',
+    '【未完成动作】',
+    actionBlock,
+    '',
+    '使用原则：先回应用户当下这一次的真实问题，再按需要承接近期记忆、长期模式与未完成动作。命盘倾向只能辅助理解，不能压过用户眼前的现实处境。',
+  ].join('\n');
+}
+
 function getMemberMemoryAdmin({ userKey, chart, memberTier = 'premium' }) {
   return getMemberMemory({ userKey, chart, memberTier });
 }
@@ -1282,7 +1419,7 @@ function listMemberMemories({ limit = 100 } = {}) {
 module.exports = {
   getMemberMemory,
   updateMemberMemory,
-  buildMemberMemoryContext,
+  buildMemberMemoryContext: buildMemberMemoryContextV2,
   getMemberMemoryAdmin,
   listMemberMemories,
 };

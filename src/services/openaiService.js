@@ -1640,7 +1640,10 @@ ${SYSTEM_PROMPT_COMPANION_STYLE}
           compressedContext ? `【近期对话摘要】\n${compressedContext}` : '',
           (() => {
             try {
-              return buildMemberMemoryContext(memberMemory);
+                return buildMemberMemoryContext(memberMemory, {
+                  currentInput: message,
+                  topicType: companionPrompt.topicType,
+                });
             } catch (error) {
               console.error('[memory] failed to build member memory context:', error);
               return '';
@@ -1785,7 +1788,10 @@ async function runXiaoLiuRenReading({
       {
         role: 'system',
         content: [
-          memberMemory ? buildMemberMemoryContext(memberMemory) : '',
+            memberMemory ? buildMemberMemoryContext(memberMemory, {
+              currentInput: question,
+              topicType: engineResult?.sceneType || '',
+            }) : '',
           '这些记忆只用来理解用户，不要复读，也不要盖过这一次小六壬主断。',
         ].filter(Boolean).join('\n\n'),
       },
