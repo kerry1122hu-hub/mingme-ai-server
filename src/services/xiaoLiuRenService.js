@@ -972,7 +972,7 @@ function consumeXiaoLiuRenQuota({
       requested_at, date_key, slot_key, question_text, event_title, event_note,
       main_palace_code, main_palace_name, secondary_palace_code, secondary_palace_name,
       fortune_level, short_output, one_line_summary, likely_concern, identity_label
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     identityKey,
     `${userKey || ''}`.trim() || null,
