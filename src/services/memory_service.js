@@ -1158,10 +1158,6 @@ function updateMemberMemory({
   profile = {},
 }) {
   const userId = resolveUserId({ userKey, chart });
-  if (!isPremiumTier(memberTier)) {
-    return { enabled: false, userKey: userId };
-  }
-
   const existing = getMemberMemory({ userKey: userId, chart, memberTier });
   const recentSession = buildRecentSessionSummary({
     userMessage,
