@@ -113,6 +113,8 @@ router.post('/xiao-liu-ren', async (req, res) => {
     const resolvedEngineVersion = `${engineVersion || engine_version || 'v1.1'}`.trim() || 'v1.1';
     const resolvedEventDateTime = query_context?.datetime || eventDateTime;
     const resolvedTimezone = query_context?.timezone || 'Asia/Shanghai';
+    const membership = getMembershipStatus({ chart, userKey, profile });
+    const resolvedMemberTier = `${membership?.memberTier || memberTier || 'free'}`.trim() || 'free';
 
     const engineResult = runXiaoLiuRenEngine({
       question: `${question || ''}`.trim(),
@@ -129,7 +131,7 @@ router.post('/xiao-liu-ren', async (req, res) => {
 
     const riskControl = consumeXiaoLiuRenQuota({
       userKey,
-      memberTier: `${memberTier || 'free'}`.trim() || 'free',
+      memberTier: resolvedMemberTier,
       engineVersion: resolvedEngineVersion,
       mode: `${mode || 'current'}`.trim() || 'current',
       sceneType: engineResult.sceneType,
@@ -151,13 +153,13 @@ router.post('/xiao-liu-ren', async (req, res) => {
       question: `${question || ''}`.trim(),
       chart,
       userKey,
-      memberTier: `${memberTier || 'free'}`.trim() || 'free',
+      memberTier: resolvedMemberTier,
       engineResult,
       model: `${model || 'gpt-4o-mini'}`.trim(),
     });
 
     res.locals.outputLength = `${text || ''}`.length;
-    return res.json(ok({ text, engineResult, riskControl }));
+    return res.json(ok({ text, engineResult, riskControl, membership }));
   } catch (error) {
     res.locals.outputLength = 0;
     const status = error.status || 500;
