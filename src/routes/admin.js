@@ -532,30 +532,44 @@ router.get('/ai-usage', (req, res) => {
           <tbody id="memoryBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">明己一卦记录查看区</h2>
+        <h2 style="margin-top:20px;">玄学工具使用区</h2>
         <div class="form">
-          <input id="divinationUserKey" placeholder="输入 userKey，查看这位用户起过哪些卦、问了什么事" />
-          <button id="loadDivinationBtn">查看明己一卦记录</button>
+          <input id="divinationUserKey" placeholder="输入 userKey，查看这位用户最近的明己一卦详细记录" />
+          <button id="loadDivinationBtn">查看明己一卦详情</button>
           <div class="status" id="divinationStatus"></div>
         </div>
-        <div id="divinationDetail" class="memory-panel muted">先输入 userKey，再查看这位用户的起卦历史、主辅宫和每次所问之事。</div>
+        <div id="divinationDetail" class="memory-panel muted">先输入 userKey，再查看这位用户的起卦历史、主辅宫和每次所问之事。下方会统一显示最近的一卦与解梦使用记录。</div>
 
-        <h2 style="margin-top:20px;">最近明己一卦使用记录</h2>
+        <h2 style="margin-top:20px;">最近工具使用记录</h2>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
-          <input id="divinationSearch" placeholder="搜索 userKey / 场景 / 问题 / 宫位 / 短断" />
+          <input id="mysticToolSearch" placeholder="搜索 userKey / 昵称 / 工具 / 场景 / 梦境关键词 / 短断" />
+          <select id="mysticToolTypeFilter">
+            <option value="all">全部工具</option>
+            <option value="divination">只看明己一卦</option>
+            <option value="dream">只看明己解梦</option>
+          </select>
+          <select id="mysticToolTierFilter">
+            <option value="all">全部身份</option>
+            <option value="member">只看会员</option>
+            <option value="free">只看非会员</option>
+          </select>
+          <select id="mysticToolTimeFilter">
+            <option value="all">全部时间</option>
+            <option value="24h">最近 24 小时</option>
+            <option value="7d">最近 7 天</option>
+          </select>
         </div>
         <table>
           <thead>
             <tr>
-              <th>起卦时间</th>
+              <th>时间</th>
               <th>用户</th>
-              <th>场景 / 身份</th>
-              <th>所问之事</th>
-              <th>主宫 / 辅宫</th>
-              <th>短断</th>
+              <th>工具 / 身份</th>
+              <th>内容摘要</th>
+              <th>结果 / 状态</th>
             </tr>
           </thead>
-          <tbody id="divinationBody"></tbody>
+          <tbody id="mysticToolBody"></tbody>
         </table>
 
         <h2 style="margin-top:20px;">付费意向看板</h2>
@@ -659,8 +673,11 @@ router.get('/ai-usage', (req, res) => {
     const membershipGroupFilter = document.getElementById('membershipGroupFilter');
     const memoryBody = document.getElementById('memoryBody');
     const memorySearch = document.getElementById('memorySearch');
-    const divinationBody = document.getElementById('divinationBody');
-    const divinationSearch = document.getElementById('divinationSearch');
+    const mysticToolBody = document.getElementById('mysticToolBody');
+    const mysticToolSearch = document.getElementById('mysticToolSearch');
+    const mysticToolTypeFilter = document.getElementById('mysticToolTypeFilter');
+    const mysticToolTierFilter = document.getElementById('mysticToolTierFilter');
+    const mysticToolTimeFilter = document.getElementById('mysticToolTimeFilter');
     const leadBody = document.getElementById('leadBody');
     const contactMessageBody = document.getElementById('contactMessageBody');
     const contactMessageSearch = document.getElementById('contactMessageSearch');
@@ -686,7 +703,7 @@ router.get('/ai-usage', (req, res) => {
     let latestMembershipItems = [];
     let expandedMembershipRows = {};
     let latestMemoryItems = [];
-    let latestDivinationItems = [];
+    let latestMysticToolItems = [];
     let latestLeadItems = [];
     let latestContactMessageItems = [];
     let latestManualPaymentItems = [];
@@ -1012,8 +1029,70 @@ router.get('/ai-usage', (req, res) => {
         : '<tr><td colspan="5" class="muted">还没有符合条件的会员记忆记录。</td></tr>';
     }
 
+    function getFilteredMysticTools(items) {
+      const keyword = String(mysticToolSearch?.value || '').trim().toLowerCase();
+      const typeFilter = String(mysticToolTypeFilter?.value || 'all').trim();
+      const tierFilter = String(mysticToolTierFilter?.value || 'all').trim();
+      const timeFilter = String(mysticToolTimeFilter?.value || 'all').trim();
+      const now = Date.now();
+      const filteredByType = typeFilter === 'all'
+        ? items
+        : items.filter((item) => item.toolType === typeFilter);
+      const filteredByTier = tierFilter === 'all'
+        ? filteredByType
+        : filteredByType.filter((item) => (tierFilter === 'member' ? item.isMember : !item.isMember));
+      const filteredByTime = timeFilter === 'all'
+        ? filteredByTier
+        : filteredByTier.filter((item) => {
+          const itemTime = Date.parse(item.requestedAt || item.createdAt || '') || 0;
+          if (!itemTime) return false;
+          if (timeFilter === '24h') return itemTime >= now - 24 * 60 * 60 * 1000;
+          if (timeFilter === '7d') return itemTime >= now - 7 * 24 * 60 * 60 * 1000;
+          return true;
+        });
+      if (!keyword) return filteredByTime;
+      return filteredByTime.filter((item) => {
+        const searchBase = [
+          item.userKey,
+          item.identityLabel,
+          item.nickname,
+          item.toolLabel,
+          item.sceneType,
+          item.questionText,
+          item.mainPalaceName,
+          item.secondaryPalaceName,
+          item.shortOutput,
+          item.likelyConcern,
+          item.summaryText,
+          item.resultText,
+          item.statusLabel,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
+    function renderMysticToolList(items) {
+      latestMysticToolItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredMysticTools(latestMysticToolItems);
+      mysticToolBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const toolLabel = item.toolLabel || '玄学工具';
+          const tierLabel = item.memberLabel || (item.isMember ? '会员' : '非会员');
+          const summaryText = item.summaryText || item.questionText || '未留内容';
+          const resultText = item.resultText || item.statusLabel || '暂无';
+          return '<tr>'
+            + '<td>' + (item.requestedAt || item.createdAt || '--') + '</td>'
+            + '<td><span class="mono">' + (item.userKey || item.identityLabel || '--') + '</span><div class="muted">' + (item.nickname || '未留昵称') + '</div></td>'
+            + '<td>' + toolLabel + '<div class="muted">' + tierLabel + '</div></td>'
+            + '<td>' + summaryText + '</td>'
+            + '<td>' + resultText + '</td>'
+            + '</tr>';
+        }).join('')
+        : '<tr><td colspan="5" class="muted">还没有符合条件的玄学工具使用记录。</td></tr>';
+    }
+
     function getFilteredDivinations(items) {
-      const keyword = String(divinationSearch?.value || '').trim().toLowerCase();
+      const keyword = String(mysticToolSearch?.value || '').trim().toLowerCase();
       if (!keyword) return items;
       return items.filter((item) => {
         const searchBase = [
@@ -1030,26 +1109,13 @@ router.get('/ai-usage', (req, res) => {
       });
     }
 
-    function renderDivinationList(items) {
-      latestDivinationItems = Array.isArray(items) ? items : [];
-      const filteredItems = getFilteredDivinations(latestDivinationItems);
-      divinationBody.innerHTML = filteredItems.length
-        ? filteredItems.map((item) => {
-          const palaceText = item.secondaryPalaceName
-            ? (item.mainPalaceName || '--') + ' / ' + item.secondaryPalaceName
-            : (item.mainPalaceName || '--');
-          const sceneLabel = item.sceneType || 'decision';
-          const tierLabel = item.memberTier === 'member' ? '会员' : '非会员';
-          return '<tr>'
-            + '<td>' + (item.requestedAt || '--') + '</td>'
-            + '<td><span class="mono">' + (item.userKey || item.identityLabel || '--') + '</span></td>'
-            + '<td>' + sceneLabel + '<div class="muted">' + tierLabel + '</div></td>'
-            + '<td>' + (item.questionText || item.eventTitle || '未留问题') + '</td>'
-            + '<td>' + palaceText + '<div class="muted">' + (item.fortuneLevel || '未定级') + '</div></td>'
-            + '<td>' + (item.shortOutput || item.oneLineSummary || '暂无') + '</td>'
-            + '</tr>';
-        }).join('')
-        : '<tr><td colspan="6" class="muted">还没有明己一卦使用记录。</td></tr>';
+    function getDreamUsageRelatedProfile(item) {
+      const userKey = String(item?.userKey || '').trim();
+      const payload = item?.payload || {};
+      const fromMembership = latestMembershipItems.find((entry) => entry.userKey === userKey) || {};
+      return {
+        nickname: payload.nickname || fromMembership.nickname || '',
+      };
     }
 
     function renderMemoryDetail(memory) {
@@ -1355,11 +1421,12 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, divinations, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
+        const [usage, memberships, memories, divinations, analytics, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/divination-usage'),
+          requestJson('/admin/api/analytics-events?limit=300'),
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
           requestJson('/admin/api/contact-messages'),
@@ -1369,7 +1436,49 @@ router.get('/ai-usage', (req, res) => {
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
         renderMemoryList(memories.items || []);
-        renderDivinationList(divinations.items || []);
+        const divinationItems = (divinations.items || []).map((item) => {
+          const palaceText = item.secondaryPalaceName
+            ? (item.mainPalaceName || '--') + ' / ' + item.secondaryPalaceName
+            : (item.mainPalaceName || '--');
+          const isMember = item.memberTier === 'member';
+          return {
+            ...item,
+            toolType: 'divination',
+            toolLabel: '明己一卦',
+            nickname: '',
+            isMember,
+            memberLabel: isMember ? '会员' : '非会员',
+            summaryText: (item.questionText || item.eventTitle || '未留问题') + '<div class="muted">' + (item.sceneType || 'decision') + '</div>',
+            resultText: (item.shortOutput || item.oneLineSummary || '暂无') + '<div class="muted">' + palaceText + ' / ' + (item.fortuneLevel || '未定级') + '</div>',
+          };
+        });
+        const dreamItems = (analytics.items || [])
+          .filter((item) => ['mingji_dream_submit', 'mingji_dream_success'].includes(item.eventName))
+          .map((item) => {
+            const payload = item.payload || {};
+            const normalizedTier = String(payload.memberTier || '').trim().toLowerCase();
+            const isMember = Boolean(normalizedTier && normalizedTier !== 'free');
+            const nickname = getDreamUsageRelatedProfile(item).nickname || '';
+            return {
+              ...item,
+              toolType: 'dream',
+              nickname,
+              toolLabel: '明己解梦',
+              isMember,
+              memberLabel: isMember ? '会员' : '非会员',
+              statusLabel: item.eventName === 'mingji_dream_success' ? '已生成' : '已提交',
+              summaryText: (payload.preview || '未留梦境摘要') + '<div class="muted">长度：' + Number(payload.dreamLength || 0) + ' 字</div>',
+              resultText: item.eventName === 'mingji_dream_success' ? '梦解已生成' : '等待生成结果',
+            };
+          });
+        renderMysticToolList([
+          ...divinationItems,
+          ...dreamItems,
+        ].sort((a, b) => {
+          const timeA = Date.parse(a.requestedAt || a.createdAt || 0) || 0;
+          const timeB = Date.parse(b.requestedAt || b.createdAt || 0) || 0;
+          return timeB - timeA;
+        }));
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
         renderContactMessages(contactMessages.items || []);
@@ -1506,7 +1615,10 @@ router.get('/ai-usage', (req, res) => {
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     contactMessageSearch.addEventListener('input', () => renderContactMessages(latestContactMessageItems));
     memorySearch.addEventListener('input', () => renderMemoryList(latestMemoryItems));
-    divinationSearch.addEventListener('input', () => renderDivinationList(latestDivinationItems));
+    mysticToolSearch.addEventListener('input', () => renderMysticToolList(latestMysticToolItems));
+    mysticToolTypeFilter.addEventListener('change', () => renderMysticToolList(latestMysticToolItems));
+    mysticToolTierFilter.addEventListener('change', () => renderMysticToolList(latestMysticToolItems));
+    mysticToolTimeFilter.addEventListener('change', () => renderMysticToolList(latestMysticToolItems));
     approvedPaymentSearch.addEventListener('input', () => renderApprovedPaymentReviews(latestApprovedPaymentItems));
     document.addEventListener('click', (event) => {
       const sectionTarget = event.target?.getAttribute?.('data-section-target');
