@@ -278,6 +278,11 @@ function normalizeMembership(row) {
   };
 }
 
+function buildTrialExpiresAt(days = 30) {
+  const expiresAt = new Date(Date.now() + Math.max(1, Number(days || 30)) * 24 * 60 * 60 * 1000);
+  return expiresAt.toISOString();
+}
+
 function getMembershipStatus({ userKey, chart, profile }) {
   const resolvedKey = buildUserKey({ userKey, chart });
   syncUserProfile(resolvedKey, chart, profile);
@@ -370,6 +375,54 @@ function setMembership({
   );
 
   return getMembershipStatus({ userKey: resolvedKey, chart, profile });
+}
+
+function grantRegistrationTrial({
+  userKey,
+  chart,
+  profile,
+  registration,
+  trialDays = 30,
+} = {}) {
+  const resolvedKey = buildUserKey({ userKey, chart });
+  const mergedProfile = {
+    ...(profile || {}),
+    nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+    city: `${registration?.city || profile?.city || ''}`.trim(),
+    focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+  };
+
+  syncUserProfile(resolvedKey, chart, mergedProfile);
+
+  const existingRow = getMembershipRow(resolvedKey);
+  const existingMembership = normalizeMembership(existingRow);
+
+  if (existingRow) {
+    return {
+      userKey: resolvedKey,
+      granted: false,
+      reason: existingMembership.isPremium ? 'already_premium' : 'already_registered',
+      trialDays: Number(trialDays || 30),
+      ...existingMembership,
+    };
+  }
+
+  const membership = setMembership({
+    userKey: resolvedKey,
+    chart,
+    profile: mergedProfile,
+    tier: 'trial',
+    status: 'active',
+    expiresAt: buildTrialExpiresAt(trialDays),
+    notes: 'registration_trial_30_days',
+  });
+
+  return {
+    ...membership,
+    granted: true,
+    reason: 'registration_trial_granted',
+    trialDays: Number(trialDays || 30),
+  };
 }
 
 function listUsageOverview({ dateKey = getTodayKey(), limit = 100 } = {}) {
@@ -505,6 +558,7 @@ module.exports = {
   getQuotaStatus,
   consumeQuota,
   setMembership,
+  grantRegistrationTrial,
   setExtraQuota,
   listUsageOverview,
   listMemberships,

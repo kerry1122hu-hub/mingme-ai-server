@@ -1,7 +1,12 @@
 const express = require('express');
 const multer = require('multer');
 const { runChat, runReading, runTranscription, runXiaoLiuRenReading } = require('../services/openaiService');
-const { getQuotaStatus, consumeQuota, getMembershipStatus } = require('../services/quotaService');
+const {
+  getQuotaStatus,
+  consumeQuota,
+  getMembershipStatus,
+  grantRegistrationTrial,
+} = require('../services/quotaService');
 const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
@@ -197,6 +202,30 @@ router.post('/membership-status', async (req, res) => {
   try {
     const { chart, userKey, profile } = req.body || {};
     const membership = getMembershipStatus({ chart, userKey, profile });
+    res.locals.outputLength = JSON.stringify(membership).length;
+    return res.json(ok({ membership }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/registration-trial', async (req, res) => {
+  try {
+    const { chart, userKey, profile, registration } = req.body || {};
+    const membership = grantRegistrationTrial({
+      chart,
+      userKey,
+      profile: {
+        ...(profile || {}),
+        nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+        city: `${registration?.city || profile?.city || ''}`.trim(),
+        focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+      },
+      registration,
+      trialDays: 30,
+    });
+
     res.locals.outputLength = JSON.stringify(membership).length;
     return res.json(ok({ membership }));
   } catch (error) {
