@@ -7,7 +7,8 @@
     "postinstall": "npm rebuild better-sqlite3 --build-from-source",
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:mingsky-narrative": "node scripts/runMingskyNarrativeRegression.js"
   },
   "keywords": [],
   "author": "",

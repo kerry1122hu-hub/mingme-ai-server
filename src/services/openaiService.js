@@ -5,6 +5,11 @@ const {
   updateMemberMemory,
   buildMemberMemoryContext,
 } = require('./memory_service');
+const {
+  buildMingSkyNarrativePrompt: buildMingSkyNarrativePromptV1,
+  normalizeMingSkyNarrativeOutput: normalizeMingSkyNarrativeOutputV1,
+  tryParseJson: tryParseJsonV1,
+} = require('./mingskyNarrativeService');
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -1848,18 +1853,18 @@ async function runMingSkyNarrative({ payload, model = DEFAULT_MODEL }) {
       },
       {
         role: 'user',
-        content: buildMingSkyNarrativePrompt(payload),
+        content: buildMingSkyNarrativePromptV1(payload),
       },
     ],
   });
 
   const content = response.choices?.[0]?.message?.content || '';
-  const parsed = tryParseJson(content);
+  const parsed = tryParseJsonV1(content);
   if (!parsed) {
     throw new Error('AI narrative returned non-JSON content');
   }
 
-  return normalizeMingSkyNarrativeOutput(parsed, payload);
+  return normalizeMingSkyNarrativeOutputV1(parsed, payload);
 }
 
 async function runXiaoLiuRenReading({

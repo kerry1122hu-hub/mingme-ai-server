@@ -1,0 +1,47 @@
+{
+  "schema_version": "mingsky-narrative-output.v1",
+  "title": "你的成长不是慢，而是成熟得更扎实",
+  "summary": "这份试读会先把你最强的盘面主轴翻译成能落到现实里的语言。",
+  "sections": [
+    {
+      "section_id": "orientation",
+      "type": "summary",
+      "title": "读盘导语",
+      "content": "你的盘面不是一眼惊艳型，而是越走越稳、越到后面越能看出分量。很多事情需要时间沉淀，但一旦成形，往往比表面的快速推进更可靠。",
+      "evidence_refs": [
+        "SATURN_IN_HOUSE_10",
+        "MOON_SQUARE_SATURN"
+      ]
+    },
+    {
+      "section_id": "section_2",
+      "type": "personality",
+      "title": "你的个性",
+      "content": "你对关系和氛围很敏锐，但并不会立刻把所有感受摊开。你更习惯先在心里整理、判断，再决定如何表达，这让你看起来克制，却也让你更有分寸。",
+      "evidence_refs": [
+        "SATURN_IN_HOUSE_10",
+        "MOON_SQUARE_SATURN"
+      ]
+    },
+    {
+      "section_id": "section_3",
+      "type": "career",
+      "title": "你的事业节奏",
+      "content": "你适合把能力做厚，而不是只追逐短期的高光。稳定交付、持续深耕和长期信誉，会比一时的速度更能把你送到更高的位置。",
+      "evidence_refs": [
+        "SATURN_IN_HOUSE_10",
+        "MOON_SQUARE_SATURN"
+      ]
+    },
+    {
+      "section_id": "section_4",
+      "type": "cta",
+      "title": "创建免费账户即可解锁完整分析",
+      "content": "注册后继续查看完整章节、全部行星说明、更多相位细解，以及前世、关系、财富等深度报告。",
+      "evidence_refs": [
+        "SATURN_IN_HOUSE_10",
+        "MOON_SQUARE_SATURN"
+      ]
+    }
+  ]
+}

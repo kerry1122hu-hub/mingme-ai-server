@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingsky.app/schemas/mingsky-narrative-output.schema.json",
+  "title": "MingSkyNarrativeOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "title", "summary", "sections"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "mingsky-narrative-output.v1"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "type", "title", "content", "evidence_refs"],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["summary", "personality", "relationships", "career", "money", "growth", "timing", "shadow", "cta"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

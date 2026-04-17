@@ -1,0 +1,53 @@
+{
+  "chart_meta": {
+    "report_title": "前世报告",
+    "headline": "你的成长不是慢，而是成熟得更扎实",
+    "summary": "很多能力需要靠时间沉淀。等时机真正到来时，你往往已经比别人更稳。",
+    "birth_date": "1994-09-17",
+    "birth_time": "08:30",
+    "city": "北京市 / Beijing, China",
+    "province": "北京市",
+    "timezone": "Asia/Shanghai",
+    "asc_sign": "天秤座",
+    "house_system_label": "整宫制（Whole Sign）"
+  },
+  "semantic": {
+    "insights": [
+      {
+        "code": "career_compounds_through_discipline",
+        "title": "你的事业更像复利，不像爆发",
+        "body": "长期积累、专业深耕和稳定交付是你更可靠的增长方式。",
+        "section": "career",
+        "confidence": 0.83
+      },
+      {
+        "code": "interiority_needs_trust_and_processing_space",
+        "title": "你的感受需要先被消化，再被表达",
+        "body": "你不是没有情绪，而是更需要先在内在整理它们。",
+        "section": "personality",
+        "confidence": 0.8
+      }
+    ],
+    "tags": [
+      {
+        "code": "career.trajectory.late_bloomer",
+        "label": "后劲型发展",
+        "cross_system_agreement": false
+      }
+    ],
+    "evidence": [
+      { "code": "SATURN_IN_HOUSE_10", "label": "SATURN IN HOUSE 10", "system": "western" },
+      { "code": "MOON_SQUARE_SATURN", "label": "MOON SQUARE SATURN", "system": "western" }
+    ]
+  },
+  "sections": [
+    {
+      "title": "盘面底色",
+      "body": "上升落在天秤，太阳与月亮的组合让你既重视关系，也重视内在秩序。"
+    },
+    {
+      "title": "关键结构",
+      "body": "月亮与土星的结构说明你常常先把感受压住，再决定如何回应。"
+    }
+  ]
+}
