@@ -1,27 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mingkong.app/schemas/profile-card.schema.json",
-  "title": "MingKongProfileCard",
+  "title": "ProfileCard",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "language",
+    "tone_preference",
     "time_accuracy",
     "chart_core_summary"
   ],
   "properties": {
     "user_name": {
-      "type": "string",
-      "maxLength": 80
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 40
     },
     "language": {
       "type": "string",
-      "minLength": 2,
-      "maxLength": 16
+      "enum": [
+        "zh-CN",
+        "zh-TW",
+        "en-US",
+        "en-GB"
+      ]
     },
     "tone_preference": {
       "type": "string",
-      "maxLength": 64
+      "enum": [
+        "direct_structured",
+        "warm_reflective",
+        "professional_warm",
+        "gentle_supportive",
+        "concise_clinical"
+      ]
     },
     "time_accuracy": {
       "type": "string",
@@ -32,32 +47,205 @@
       ]
     },
     "chart_core_summary": {
+      "$ref": "#/$defs/ChartCoreSummary"
+    },
+    "user_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "answer_length_preference": {
+          "type": "string",
+          "enum": [
+            "short",
+            "medium",
+            "long"
+          ]
+        },
+        "avoid_fatalism": {
+          "type": "boolean"
+        },
+        "prefer_actionable_advice": {
+          "type": "boolean"
+        },
+        "prefer_emotional_validation": {
+          "type": "boolean"
+        }
+      }
+    },
+    "guardrails": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "avoid_medical_legal_financial_certainty": {
+          "type": "boolean"
+        },
+        "mark_time_sensitive_claims": {
+          "type": "boolean"
+        },
+        "limit_house_based_claims_when_time_uncertain": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ChartCoreSummary": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "sun_sign",
         "moon_sign",
-        "asc_sign",
-        "dominant_planet"
+        "asc_sign"
       ],
       "properties": {
         "sun_sign": {
-          "type": "string",
-          "maxLength": 32
+          "$ref": "#/$defs/SignCode"
         },
         "moon_sign": {
-          "type": "string",
-          "maxLength": 32
+          "$ref": "#/$defs/SignCode"
         },
         "asc_sign": {
-          "type": "string",
-          "maxLength": 32
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SignCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "dominant_planet": {
-          "type": "string",
-          "maxLength": 32
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PointCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "element_balance": {
+          "$ref": "#/$defs/ElementBalance"
+        },
+        "modality_balance": {
+          "$ref": "#/$defs/ModalityBalance"
+        },
+        "core_tags": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "core_insights": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
         }
       }
+    },
+    "ElementBalance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fire",
+        "earth",
+        "air",
+        "water"
+      ],
+      "properties": {
+        "fire": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "earth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "air": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "water": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "ModalityBalance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cardinal",
+        "fixed",
+        "mutable"
+      ],
+      "properties": {
+        "cardinal": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fixed": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mutable": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "SignCode": {
+      "type": "string",
+      "enum": [
+        "aries",
+        "taurus",
+        "gemini",
+        "cancer",
+        "leo",
+        "virgo",
+        "libra",
+        "scorpio",
+        "sagittarius",
+        "capricorn",
+        "aquarius",
+        "pisces"
+      ]
+    },
+    "PointCode": {
+      "type": "string",
+      "enum": [
+        "SUN",
+        "MOON",
+        "MERCURY",
+        "VENUS",
+        "MARS",
+        "JUPITER",
+        "SATURN",
+        "URANUS",
+        "NEPTUNE",
+        "PLUTO",
+        "CHIRON",
+        "TRUE_NODE",
+        "MEAN_NODE",
+        "SOUTH_NODE",
+        "ASC",
+        "DSC",
+        "MC",
+        "IC",
+        "PART_OF_FORTUNE"
+      ]
     }
   }
 }

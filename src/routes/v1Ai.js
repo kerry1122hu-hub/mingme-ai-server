@@ -3,6 +3,7 @@ const { getQuotaStatus, consumeQuota } = require('../services/quotaService');
 const { requireAppToken } = require('../utils/auth');
 const { fail, ok } = require('../utils/response');
 const { generateMingKongReply, DEFAULT_MODEL } = require('../services/mingkongAiReplyService');
+const { validateMingKongReplyRequest } = require('../services/mingkongReplyValidationService');
 
 const router = express.Router();
 
@@ -68,20 +69,22 @@ router.post('/reply', async (req, res) => {
       model,
     } = req.body || {};
 
-    if (!profile_card || typeof profile_card !== 'object') {
-      return res.status(400).json(fail('profile_card is required', 'BAD_REQUEST'));
-    }
-    if (!semantic_profile || typeof semantic_profile !== 'object') {
-      return res.status(400).json(fail('semantic_profile is required', 'BAD_REQUEST'));
-    }
-    if (!intent_packet || typeof intent_packet !== 'object') {
-      return res.status(400).json(fail('intent_packet is required', 'BAD_REQUEST'));
-    }
-    if (!output_contract || typeof output_contract !== 'object') {
-      return res.status(400).json(fail('output_contract is required', 'BAD_REQUEST'));
-    }
-    if (!textOf(intent_packet?.user_question)) {
-      return res.status(400).json(fail('intent_packet.user_question is required', 'BAD_REQUEST'));
+    const validation = validateMingKongReplyRequest({
+      user_id,
+      scene,
+      topic,
+      profile_card,
+      semantic_profile,
+      intent_packet,
+      session_state,
+      output_contract,
+      model,
+    });
+
+    if (!validation.ok) {
+      return res.status(400).json(fail('Invalid MingKong AI reply payload', 'VALIDATION_ERROR', {
+        errors: validation.errors,
+      }));
     }
 
     const resolvedUserKey = textOf(user_id, requestId);
@@ -100,7 +103,7 @@ router.post('/reply', async (req, res) => {
       profile_card,
       semantic_profile,
       intent_packet,
-      session_state: session_state && typeof session_state === 'object' ? session_state : {},
+      session_state,
       output_contract,
     };
 

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingkong.app/schemas/session-state.schema.json",
+  "title": "SessionState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conversation_topic",
+    "avoid_repetition"
+  ],
+  "properties": {
+    "conversation_topic": {
+      "type": "string",
+      "enum": [
+        "personality",
+        "relationships",
+        "career",
+        "money",
+        "family",
+        "growth",
+        "timing",
+        "emotion",
+        "decision",
+        "general"
+      ]
+    },
+    "already_explained": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 260
+      }
+    },
+    "avoid_repetition": {
+      "type": "boolean"
+    },
+    "max_length_chars": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 2000
+    },
+    "recent_messages": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "last_reply_summary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
+    },
+    "active_report_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 80
+    }
+  }
+}

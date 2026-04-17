@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mingkong.app/schemas/intent-packet.schema.json",
-  "title": "MingKongIntentPacket",
+  "title": "IntentPacket",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,23 +14,64 @@
     "user_question": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 1200
+      "maxLength": 1000
     },
     "topic": {
       "type": "string",
-      "maxLength": 64
+      "enum": [
+        "personality",
+        "relationships",
+        "career",
+        "money",
+        "family",
+        "growth",
+        "timing",
+        "emotion",
+        "decision",
+        "general"
+      ]
     },
     "goal": {
       "type": "string",
-      "maxLength": 64
+      "enum": [
+        "clarify_pattern",
+        "self_understanding",
+        "decision_support",
+        "emotional_support",
+        "action_guidance",
+        "timing_reflection",
+        "relationship_reflection",
+        "career_reflection",
+        "general_consultation"
+      ]
     },
     "desired_output": {
       "type": "string",
-      "maxLength": 64
+      "enum": [
+        "short_actionable",
+        "concise_reflective",
+        "structured_analysis",
+        "gentle_support",
+        "decision_framework",
+        "chat_reply"
+      ]
     },
     "emotion_state": {
-      "type": "string",
-      "maxLength": 64
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "calm",
+        "confused",
+        "tired_confused",
+        "anxious",
+        "sad",
+        "frustrated",
+        "hopeful",
+        "urgent",
+        null
+      ]
     },
     "priority_tags": {
       "type": "array",
@@ -42,11 +83,38 @@
     },
     "priority_insights": {
       "type": "array",
-      "maxItems": 6,
+      "maxItems": 5,
       "items": {
         "type": "string",
         "pattern": "^[a-z0-9_]+$"
       }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_length_chars": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 2000
+        },
+        "avoid_repetition": {
+          "type": "boolean"
+        },
+        "avoid_followup_question": {
+          "type": "boolean"
+        },
+        "must_include_advice": {
+          "type": "boolean"
+        }
+      }
+    },
+    "context_hint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
     }
   }
 }

@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingkong.app/schemas/semantic-profile.schema.json",
+  "title": "SemanticProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "top_tags",
+    "top_insights"
+  ],
+  "properties": {
+    "top_tags": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/SemanticTagRef"
+      }
+    },
+    "top_insights": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/SemanticInsightRef"
+      }
+    },
+    "dominant_themes": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "evidence_index": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "time_accuracy_limited",
+          "house_claims_limited",
+          "avoid_fatalism",
+          "avoid_medical_claim",
+          "avoid_financial_claim",
+          "avoid_legal_claim",
+          "low_confidence_output"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "SemanticTagRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag_code",
+        "weight",
+        "confidence"
+      ],
+      "properties": {
+        "tag_code": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "self",
+            "career",
+            "relationship",
+            "wealth",
+            "health",
+            "timing",
+            "purpose",
+            "spirit",
+            "personality",
+            "money",
+            "family",
+            "growth",
+            "emotion",
+            "decision",
+            "general",
+            "shadow"
+          ]
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "polarity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "supportive",
+            "challenging",
+            "mixed",
+            "neutral",
+            null
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "SemanticInsightRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "insight_code",
+        "confidence"
+      ],
+      "properties": {
+        "insight_code": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "summary",
+            "personality",
+            "relationships",
+            "career",
+            "money",
+            "family",
+            "growth",
+            "timing",
+            "shadow",
+            "general",
+            null
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref_code"
+      ],
+      "properties": {
+        "ref_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "chart_result",
+            "semantic_rule",
+            "derived_ref",
+            "narrative",
+            null
+          ]
+        },
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}
