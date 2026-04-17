@@ -13,9 +13,10 @@ function readJson(filePath) {
 
 function main() {
   const fixturesDir = path.join(__dirname, '..', 'src', 'services', '__fixtures__');
-  const payload = readJson(path.join(fixturesDir, 'mingskyNarrative.payload.sample.json'));
-  const candidate = readJson(path.join(fixturesDir, 'mingskyNarrative.ai-candidate.sample.json'));
-  const expected = readJson(path.join(fixturesDir, 'mingskyNarrative.expected-output.sample.json'));
+  const contractPair = 'contract-pair.basic-natal.v1';
+  const payload = readJson(path.join(fixturesDir, `${contractPair}.payload.json`));
+  const candidate = readJson(path.join(fixturesDir, `${contractPair}.ai-candidate.json`));
+  const expected = readJson(path.join(fixturesDir, `${contractPair}.normalized.json`));
 
   const normalized = normalizeMingSkyNarrativeOutput(candidate, payload);
   const validation = validateMingSkyNarrativeOutputShape(normalized);
@@ -24,7 +25,7 @@ function main() {
   assert.strictEqual(validation.ok, true, `shape validation failed: ${validation.errors.join('; ')}`);
   assert.deepStrictEqual(normalized, expected, 'normalized output drifted from expected snapshot');
 
-  console.log('MingSky narrative regression passed.');
+  console.log(`MingSky narrative regression passed for ${contractPair}.`);
   console.log(`Sections: ${normalized.sections.length}`);
   console.log(`Title: ${normalized.title}`);
 }
