@@ -1,0 +1,65 @@
+{
+  "schema_version": "mingsky-narrative-output.v1",
+  "title": "先读清能稳定成立的主题，再决定是否解锁完整版",
+  "summary": "这份试读同时携带多条 guardrail，因此只保留稳定、可解释的主题，不展开依赖出生时间与高置信定位的结论。",
+  "sections": [
+    {
+      "section_id": "guardrail_bundle",
+      "type": "summary",
+      "title": "这是一份带保护边界的试读",
+      "content": "由于同时存在出生时间未知、宫位不稳、角度不稳与时运限制，这次不会把关系定位、事业轴线或具体年份窗口说成确定事实。我们先保留那些在当前输入下依然稳定成立的主题。",
+      "evidence_refs": [
+        "TIME_UNKNOWN",
+        "HOUSES_UNRELIABLE",
+        "ANGLES_UNRELIABLE",
+        "TIMING_LIMITED",
+        "LOW_CONFIDENCE_OUTPUT"
+      ]
+    },
+    {
+      "section_id": "section_2",
+      "type": "personality",
+      "title": "你会先让感受沉到底，再决定要不要表达",
+      "content": "你并不是反应慢，而是更倾向先在心里确认什么才是真的。这样会让你的表达更谨慎，也更有分量。",
+      "evidence_refs": [
+        "SUN_IN_LEO",
+        "MOON_IN_SCORPIO",
+        "TIME_UNKNOWN",
+        "HOUSES_UNRELIABLE",
+        "ANGLES_UNRELIABLE",
+        "TIMING_LIMITED",
+        "LOW_CONFIDENCE_OUTPUT"
+      ]
+    },
+    {
+      "section_id": "section_3",
+      "type": "growth",
+      "title": "很多答案会在慢慢辨认之后才真正成形",
+      "content": "你的人生课题更适合在真实经历中逐步提炼，而不是过早用一个标签把自己定住。慢一点，反而更接近真正的方向。",
+      "evidence_refs": [
+        "SUN_IN_LEO",
+        "MOON_IN_SCORPIO",
+        "TIME_UNKNOWN",
+        "HOUSES_UNRELIABLE",
+        "ANGLES_UNRELIABLE",
+        "TIMING_LIMITED",
+        "LOW_CONFIDENCE_OUTPUT"
+      ]
+    },
+    {
+      "section_id": "section_4",
+      "type": "cta",
+      "title": "创建账户后可继续解锁完整报告",
+      "content": "补充更完整的出生信息并解锁会员后，系统会继续展开更细的关系、事业、时运与章节化长报告。",
+      "evidence_refs": [
+        "SUN_IN_LEO",
+        "MOON_IN_SCORPIO",
+        "TIME_UNKNOWN",
+        "HOUSES_UNRELIABLE",
+        "ANGLES_UNRELIABLE",
+        "TIMING_LIMITED",
+        "LOW_CONFIDENCE_OUTPUT"
+      ]
+    }
+  ]
+}

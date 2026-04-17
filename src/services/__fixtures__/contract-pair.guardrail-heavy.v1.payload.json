@@ -1,0 +1,91 @@
+{
+  "chart_meta": {
+    "report_title": "前世报告",
+    "headline": "先读清能稳定成立的主题，再决定是否解锁完整版",
+    "summary": "这份试读同时携带多条 guardrail，因此只保留稳定、可解释的主题，不展开依赖出生时间与高置信定位的结论。",
+    "birth_date": "1991-07-23",
+    "birth_time": "",
+    "city": "温哥华 / Vancouver, Canada",
+    "province": "British Columbia",
+    "timezone": "America/Vancouver",
+    "asc_sign": "",
+    "house_system_label": "未启用（guardrail 限制）"
+  },
+  "semantic": {
+    "insights": [
+      {
+        "code": "inner_world_runs_deeper_than_first_impression",
+        "title": "你真正驱动自己的，往往比表面看上去更深一层",
+        "body": "你会先在内部建立意义感，再决定要不要把真实的想法表达出来。",
+        "section": "personality",
+        "confidence": 0.74
+      },
+      {
+        "code": "meaning_requires_slow_refinement",
+        "title": "很多重要课题，需要在反复辨认之后才会成形",
+        "body": "你的人生节奏不适合被过快下定义，反而适合在稳定体验里慢慢提炼方向。",
+        "section": "growth",
+        "confidence": 0.71
+      }
+    ],
+    "tags": [
+      {
+        "code": "self.shadow.deep_internalization",
+        "label": "深层内化",
+        "cross_system_agreement": false
+      },
+      {
+        "code": "purpose.direction.slow_refinement",
+        "label": "慢速定向",
+        "cross_system_agreement": false
+      }
+    ],
+    "evidence": [
+      {
+        "code": "SUN_IN_LEO",
+        "label": "SUN IN LEO",
+        "system": "western"
+      },
+      {
+        "code": "MOON_IN_SCORPIO",
+        "label": "MOON IN SCORPIO",
+        "system": "western"
+      },
+      {
+        "code": "TIME_UNKNOWN",
+        "label": "TIME UNKNOWN",
+        "system": "guardrail"
+      },
+      {
+        "code": "HOUSES_UNRELIABLE",
+        "label": "HOUSES UNRELIABLE",
+        "system": "guardrail"
+      },
+      {
+        "code": "ANGLES_UNRELIABLE",
+        "label": "ANGLES UNRELIABLE",
+        "system": "guardrail"
+      },
+      {
+        "code": "TIMING_LIMITED",
+        "label": "TIMING LIMITED",
+        "system": "guardrail"
+      },
+      {
+        "code": "LOW_CONFIDENCE_OUTPUT",
+        "label": "LOW CONFIDENCE OUTPUT",
+        "system": "guardrail"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "title": "阅读边界",
+      "body": "这次不会展开宫位、上升、天顶与具体时运窗口，只保留稳定的主轴。"
+    },
+    {
+      "title": "核心主轴",
+      "body": "你更像是在真实体验里慢慢看清自己，而不是立刻被一句结论说尽。"
+    }
+  ]
+}
