@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { runChat, runReading, runTranscription, runXiaoLiuRenReading } = require('../services/openaiService');
+const { runChat, runReading, runMingSkyNarrative, runTranscription, runXiaoLiuRenReading } = require('../services/openaiService');
 const {
   getQuotaStatus,
   consumeQuota,
@@ -83,6 +83,33 @@ router.post('/ai-reading', async (req, res) => {
 
     res.locals.outputLength = `${text || ''}`.length;
     return res.json(ok({ text, quota }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    const status = error.status || 500;
+    if (error.code === 'AI_QUOTA_EXCEEDED') {
+      return res.status(status).json(fail('今日免费次数已用完，可开通会员继续使用 AI。', error.code, { quota: error.quota }));
+    }
+    return res.status(status).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/mingsky-narrative', async (req, res) => {
+  try {
+    const { payload, chart, model, userKey, profile } = req.body || {};
+
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json(fail('payload is required', 'BAD_REQUEST'));
+    }
+
+    const quota = consumeQuota({ chart, userKey, profile });
+
+    const narrative = await runMingSkyNarrative({
+      payload,
+      model: `${model || 'gpt-4o-mini'}`.trim(),
+    });
+
+    res.locals.outputLength = JSON.stringify(narrative).length;
+    return res.json(ok({ narrative, quota }));
   } catch (error) {
     res.locals.outputLength = 0;
     const status = error.status || 500;
