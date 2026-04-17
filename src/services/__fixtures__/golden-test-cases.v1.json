@@ -1,0 +1,728 @@
+{
+  "version": "golden-test-cases-v1.0.0",
+  "description": "Regression baseline for MingKong AI reply service",
+  "cases": [
+    {
+      "case_id": "mk_gc_001_relationship_boundary",
+      "description": "Relationship topic should focus on boundaries and security without follow-up.",
+      "request": {
+        "user_id": "u_gc_001",
+        "scene": "chat",
+        "topic": "relationships",
+        "profile_card": {
+          "user_name": "user",
+          "language": "zh-CN",
+          "tone_preference": "direct_structured",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "sagittarius",
+            "moon_sign": "capricorn",
+            "asc_sign": "libra",
+            "dominant_planet": "SATURN"
+          },
+          "user_preferences": {
+            "avoid_fatalism": true,
+            "prefer_actionable_advice": true
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "relational_harmony_drive",
+              "category": "relationship",
+              "weight": 0.81,
+              "confidence": 0.89,
+              "evidence_refs": ["VENUS_IN_HOUSE_7", "ASC_IN_LIBRA"]
+            },
+            {
+              "tag_code": "boundary_learning",
+              "category": "growth",
+              "weight": 0.79,
+              "confidence": 0.86,
+              "evidence_refs": ["VENUS_SQUARE_SATURN"]
+            },
+            {
+              "tag_code": "attachment_security_need",
+              "category": "relationship",
+              "weight": 0.72,
+              "confidence": 0.82,
+              "evidence_refs": ["SATURN_IN_HOUSE_7"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "relationships_seek_harmony_but_need_boundaries",
+              "category": "theme",
+              "section": "relationships",
+              "confidence": 0.81,
+              "priority": 9,
+              "tag_refs": ["relational_harmony_drive", "boundary_learning"],
+              "evidence_refs": ["ASC_IN_LIBRA", "VENUS_IN_HOUSE_7", "VENUS_SQUARE_SATURN"]
+            },
+            {
+              "insight_code": "security_is_a_key_relationship_need",
+              "category": "theme",
+              "section": "relationships",
+              "confidence": 0.73,
+              "priority": 7,
+              "tag_refs": ["attachment_security_need"],
+              "evidence_refs": ["SATURN_IN_HOUSE_7"]
+            }
+          ],
+          "guardrails": [],
+          "confidence_summary": {
+            "overall": 0.82,
+            "tags": 0.85,
+            "insights": 0.79
+          }
+        },
+        "intent_packet": {
+          "user_question": "Why do relationships feel exhausting lately?",
+          "topic": "relationships",
+          "goal": "clarify_pattern",
+          "desired_output": "short_actionable",
+          "emotion_state": "tired_confused",
+          "priority_tags": ["boundary_learning", "relational_harmony_drive", "attachment_security_need"],
+          "priority_insights": ["relationships_seek_harmony_but_need_boundaries", "security_is_a_key_relationship_need"],
+          "constraints": {
+            "max_length_chars": 260,
+            "avoid_repetition": true,
+            "avoid_followup_question": true,
+            "must_include_advice": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "relationships",
+          "already_explained": ["You tend to keep harmony before stating your real needs."],
+          "avoid_repetition": true,
+          "max_length_chars": 260,
+          "recent_user_messages": ["Why do relationships feel exhausting lately?"]
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "short",
+          "style_profile": "mingkong_cn_v1",
+          "must_use_json_schema_reply": true
+        }
+      },
+      "assertions": {
+        "expected_source": "openai_or_fallback",
+        "expected_needs_followup": false,
+        "must_include_any_insights": ["relationships_seek_harmony_but_need_boundaries", "security_is_a_key_relationship_need"],
+        "must_include_any_tags": ["boundary_learning", "relational_harmony_drive", "attachment_security_need"],
+        "forbidden_safety_flags": ["avoid_medical_claim", "avoid_financial_claim", "avoid_legal_claim"],
+        "required_safety_flags": ["avoid_fatalism"],
+        "max_conclusion_chars": 180,
+        "max_explanation_chars": 500,
+        "max_advice_chars": 220,
+        "must_have_advice": true
+      }
+    },
+    {
+      "case_id": "mk_gc_002_career_visibility",
+      "description": "Career topic should prioritize visibility and structure.",
+      "request": {
+        "user_id": "u_gc_002",
+        "scene": "chat",
+        "topic": "career",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "professional_warm",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "leo",
+            "moon_sign": "virgo",
+            "asc_sign": "capricorn",
+            "dominant_planet": "SUN"
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "career_visibility_drive",
+              "category": "career",
+              "weight": 0.85,
+              "confidence": 0.9,
+              "evidence_refs": ["SUN_IN_HOUSE_10", "MC_IN_LEO"]
+            },
+            {
+              "tag_code": "career_structure_need",
+              "category": "career",
+              "weight": 0.76,
+              "confidence": 0.84,
+              "evidence_refs": ["SATURN_IN_HOUSE_10"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "career_benefits_from_visibility",
+              "category": "opportunity",
+              "section": "career",
+              "confidence": 0.84,
+              "priority": 9,
+              "tag_refs": ["career_visibility_drive"],
+              "evidence_refs": ["SUN_IN_HOUSE_10", "MC_IN_LEO"]
+            },
+            {
+              "insight_code": "career_growth_requires_structure",
+              "category": "theme",
+              "section": "career",
+              "confidence": 0.79,
+              "priority": 8,
+              "tag_refs": ["career_structure_need"],
+              "evidence_refs": ["SATURN_IN_HOUSE_10"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "Should I keep pushing forward in my career or pause first?",
+          "topic": "career",
+          "goal": "decision_support",
+          "desired_output": "decision_framework",
+          "priority_tags": ["career_visibility_drive", "career_structure_need"],
+          "priority_insights": ["career_benefits_from_visibility", "career_growth_requires_structure"],
+          "constraints": {
+            "max_length_chars": 320,
+            "must_include_advice": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "career",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 320
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "medium",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "must_include_all_insights": ["career_benefits_from_visibility"],
+        "must_include_any_insights": ["career_growth_requires_structure"],
+        "must_include_any_tags": ["career_visibility_drive", "career_structure_need"],
+        "required_safety_flags": ["avoid_fatalism"],
+        "must_have_advice": true
+      }
+    },
+    {
+      "case_id": "mk_gc_003_time_unknown_no_house_claims",
+      "description": "Unknown birth time should block house and timing-heavy insights.",
+      "request": {
+        "user_id": "u_gc_003",
+        "scene": "chat",
+        "topic": "general",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "direct_structured",
+          "time_accuracy": "unknown",
+          "chart_core_summary": {
+            "sun_sign": "scorpio",
+            "moon_sign": "pisces",
+            "asc_sign": null,
+            "dominant_planet": "PLUTO"
+          },
+          "guardrails": {
+            "limit_house_based_claims_when_time_uncertain": true
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "mental_depth",
+              "category": "mind",
+              "weight": 0.82,
+              "confidence": 0.87,
+              "evidence_refs": ["MERCURY_IN_SCORPIO"]
+            },
+            {
+              "tag_code": "emotional_sensitivity",
+              "category": "emotion",
+              "weight": 0.74,
+              "confidence": 0.81,
+              "evidence_refs": ["MOON_IN_PISCES"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "self_expansion_through_learning",
+              "category": "theme",
+              "section": "personality",
+              "confidence": 0.68,
+              "priority": 6,
+              "tag_refs": ["mental_depth"],
+              "evidence_refs": ["MERCURY_IN_SCORPIO"]
+            },
+            {
+              "insight_code": "this_period_supports_acceleration",
+              "category": "opportunity",
+              "section": "timing",
+              "confidence": 0.76,
+              "priority": 9,
+              "tag_refs": ["timing_acceleration"],
+              "evidence_refs": ["TRANSIT_JUPITER_TO_ASC"]
+            }
+          ],
+          "guardrails": [
+            {
+              "code": "TIME_UNKNOWN",
+              "severity": "warning",
+              "message": "Birth time is unknown; house and angle based claims should be limited.",
+              "affected_scopes": ["houses", "angles", "timing", "overall"]
+            }
+          ]
+        },
+        "intent_packet": {
+          "user_question": "My state feels unstable lately. What does it mean?",
+          "topic": "general",
+          "goal": "self_understanding",
+          "desired_output": "concise_reflective",
+          "constraints": {
+            "max_length_chars": 260
+          }
+        },
+        "session_state": {
+          "conversation_topic": "general",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 260
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "short",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "forbidden_used_insights": [
+          "this_period_supports_acceleration",
+          "this_period_requires_consolidation",
+          "career_benefits_from_visibility",
+          "roots_shape_long_term_choices"
+        ],
+        "required_safety_flags": ["time_accuracy_limited", "avoid_fatalism"],
+        "must_include_any_tags": ["mental_depth", "emotional_sensitivity"]
+      }
+    },
+    {
+      "case_id": "mk_gc_004_money_risk_boundary",
+      "description": "Money topic should emphasize boundaries and fluctuation risk.",
+      "request": {
+        "user_id": "u_gc_004",
+        "scene": "chat",
+        "topic": "money",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "concise_clinical",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "aquarius",
+            "moon_sign": "gemini",
+            "asc_sign": "taurus",
+            "dominant_planet": "URANUS"
+          },
+          "guardrails": {
+            "avoid_medical_legal_financial_certainty": true
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "money_fluctuation_pattern",
+              "category": "money",
+              "weight": 0.83,
+              "confidence": 0.88,
+              "evidence_refs": ["URANUS_IN_HOUSE_2", "VENUS_SQUARE_URANUS"]
+            },
+            {
+              "tag_code": "career_innovation_pull",
+              "category": "career",
+              "weight": 0.75,
+              "confidence": 0.82,
+              "evidence_refs": ["MC_IN_AQUARIUS"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "money_needs_risk_boundaries",
+              "category": "risk",
+              "section": "money",
+              "confidence": 0.84,
+              "priority": 8,
+              "tag_refs": ["money_fluctuation_pattern"],
+              "evidence_refs": ["URANUS_IN_HOUSE_2", "VENUS_SQUARE_URANUS"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "My finances are swinging a lot. How do I know if my judgment is off?",
+          "topic": "money",
+          "goal": "decision_support",
+          "desired_output": "structured_analysis",
+          "priority_insights": ["money_needs_risk_boundaries"],
+          "constraints": {
+            "max_length_chars": 300,
+            "must_include_advice": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "money",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 300
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "medium",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "must_include_all_insights": ["money_needs_risk_boundaries"],
+        "required_safety_flags": ["avoid_fatalism"],
+        "forbidden_safety_flags": ["none"],
+        "must_have_advice": true
+      }
+    },
+    {
+      "case_id": "mk_gc_005_emotion_shadow_tension",
+      "description": "Emotion topic can express tension but must avoid fatalistic language.",
+      "request": {
+        "user_id": "u_gc_005",
+        "scene": "chat",
+        "topic": "emotion",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "warm_reflective",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "cancer",
+            "moon_sign": "scorpio",
+            "asc_sign": "virgo"
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "emotional_sensitivity",
+              "category": "emotion",
+              "weight": 0.88,
+              "confidence": 0.91,
+              "evidence_refs": ["MOON_IN_SCORPIO"]
+            },
+            {
+              "tag_code": "control_sensitivity",
+              "category": "shadow",
+              "weight": 0.76,
+              "confidence": 0.82,
+              "evidence_refs": ["MOON_CONJUNCTION_PLUTO"]
+            },
+            {
+              "tag_code": "emotional_restraint",
+              "category": "emotion",
+              "weight": 0.69,
+              "confidence": 0.78,
+              "evidence_refs": ["SATURN_IN_HOUSE_4"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "emotions_run_deep_but_not_always_visible",
+              "category": "theme",
+              "section": "personality",
+              "confidence": 0.83,
+              "priority": 8,
+              "tag_refs": ["emotional_sensitivity", "emotional_restraint"],
+              "evidence_refs": ["MOON_IN_SCORPIO", "SATURN_IN_HOUSE_4"]
+            },
+            {
+              "insight_code": "power_and_control_are_sensitive_themes",
+              "category": "risk",
+              "section": "shadow",
+              "confidence": 0.77,
+              "priority": 8,
+              "tag_refs": ["control_sensitivity"],
+              "evidence_refs": ["MOON_CONJUNCTION_PLUTO"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "My emotions feel too heavy. Is something wrong with me?",
+          "topic": "emotion",
+          "goal": "emotional_support",
+          "desired_output": "gentle_support",
+          "priority_insights": [
+            "emotions_run_deep_but_not_always_visible",
+            "power_and_control_are_sensitive_themes"
+          ],
+          "constraints": {
+            "max_length_chars": 300,
+            "avoid_followup_question": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "emotion",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 300,
+          "forbidden_phrases": ["you are destined", "this will definitely happen", "it is your fate"]
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "medium",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "must_include_any_insights": ["emotions_run_deep_but_not_always_visible", "power_and_control_are_sensitive_themes"],
+        "required_safety_flags": ["avoid_fatalism"],
+        "forbidden_phrases": ["you are destined", "it is your fate", "this will definitely happen"]
+      }
+    },
+    {
+      "case_id": "mk_gc_006_followup_required_when_context_thin",
+      "description": "Thin context may require a single follow-up question.",
+      "request": {
+        "user_id": "u_gc_006",
+        "scene": "chat",
+        "topic": "general",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "direct_structured",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "virgo",
+            "moon_sign": "aquarius",
+            "asc_sign": "gemini"
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "mental_agility",
+              "category": "mind",
+              "weight": 0.73,
+              "confidence": 0.81,
+              "evidence_refs": ["MERCURY_IN_GEMINI"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "communication_prefers_clarity_and_speed",
+              "category": "strength",
+              "section": "personality",
+              "confidence": 0.67,
+              "priority": 5,
+              "tag_refs": ["mental_agility"],
+              "evidence_refs": ["MERCURY_IN_GEMINI"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "Is this normal lately?",
+          "topic": "general",
+          "goal": "general_consultation",
+          "desired_output": "chat_reply",
+          "constraints": {
+            "max_length_chars": 220,
+            "avoid_followup_question": false
+          }
+        },
+        "session_state": {
+          "conversation_topic": "general",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 220
+        },
+        "output_contract": {
+          "format": "chat_reply",
+          "language": "zh-CN",
+          "length": "short",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": true,
+        "followup_question_required": true,
+        "required_safety_flags": ["avoid_fatalism"]
+      }
+    },
+    {
+      "case_id": "mk_gc_007_push_snippet_short",
+      "description": "Push snippet scene must stay short.",
+      "request": {
+        "user_id": "u_gc_007",
+        "scene": "push_snippet",
+        "topic": "growth",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "direct_structured",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "capricorn",
+            "moon_sign": "taurus",
+            "asc_sign": "scorpio"
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "discipline_as_growth_path",
+              "category": "growth",
+              "weight": 0.84,
+              "confidence": 0.9,
+              "evidence_refs": ["SUN_TRINE_SATURN"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "structure_turns_potential_into_results",
+              "category": "strength",
+              "section": "growth",
+              "confidence": 0.86,
+              "priority": 8,
+              "tag_refs": ["discipline_as_growth_path"],
+              "evidence_refs": ["SUN_TRINE_SATURN"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "Give me one short reminder for today.",
+          "topic": "growth",
+          "goal": "action_guidance",
+          "desired_output": "short_actionable",
+          "priority_insights": ["structure_turns_potential_into_results"],
+          "constraints": {
+            "max_length_chars": 120,
+            "avoid_followup_question": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "growth",
+          "already_explained": [],
+          "avoid_repetition": true,
+          "max_length_chars": 120
+        },
+        "output_contract": {
+          "format": "conclusion_only",
+          "language": "zh-CN",
+          "length": "short",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "must_include_all_insights": ["structure_turns_potential_into_results"],
+        "max_conclusion_chars": 180,
+        "max_explanation_chars": 180,
+        "max_advice_chars": 180
+      }
+    },
+    {
+      "case_id": "mk_gc_008_repetition_avoidance",
+      "description": "Previously explained sentence must not be repeated verbatim.",
+      "request": {
+        "user_id": "u_gc_008",
+        "scene": "chat",
+        "topic": "relationships",
+        "profile_card": {
+          "language": "zh-CN",
+          "tone_preference": "direct_structured",
+          "time_accuracy": "exact",
+          "chart_core_summary": {
+            "sun_sign": "libra",
+            "moon_sign": "pisces",
+            "asc_sign": "cancer"
+          }
+        },
+        "semantic_profile": {
+          "semantic_version": "semantic-map-v1.0.0",
+          "top_tags": [
+            {
+              "tag_code": "relational_idealism",
+              "category": "relationship",
+              "weight": 0.8,
+              "confidence": 0.84,
+              "evidence_refs": ["VENUS_CONJUNCTION_NEPTUNE"]
+            },
+            {
+              "tag_code": "boundary_learning",
+              "category": "growth",
+              "weight": 0.74,
+              "confidence": 0.81,
+              "evidence_refs": ["NEPTUNE_IN_HOUSE_7"]
+            }
+          ],
+          "top_insights": [
+            {
+              "insight_code": "relationships_seek_harmony_but_need_boundaries",
+              "category": "theme",
+              "section": "relationships",
+              "confidence": 0.78,
+              "priority": 8,
+              "tag_refs": ["relational_idealism", "boundary_learning"],
+              "evidence_refs": ["VENUS_CONJUNCTION_NEPTUNE", "NEPTUNE_IN_HOUSE_7"]
+            }
+          ],
+          "guardrails": []
+        },
+        "intent_packet": {
+          "user_question": "What should I pay attention to next in love?",
+          "topic": "relationships",
+          "goal": "action_guidance",
+          "desired_output": "short_actionable",
+          "priority_insights": ["relationships_seek_harmony_but_need_boundaries"],
+          "constraints": {
+            "max_length_chars": 220,
+            "avoid_repetition": true,
+            "must_include_advice": true
+          }
+        },
+        "session_state": {
+          "conversation_topic": "relationships",
+          "already_explained": [
+            "You tend to idealize the relationship first and ignore your own boundaries."
+          ],
+          "avoid_repetition": true,
+          "max_length_chars": 220
+        },
+        "output_contract": {
+          "format": "conclusion_explanation_advice",
+          "language": "zh-CN",
+          "length": "short",
+          "style_profile": "mingkong_cn_v1"
+        }
+      },
+      "assertions": {
+        "expected_needs_followup": false,
+        "must_include_all_insights": ["relationships_seek_harmony_but_need_boundaries"],
+        "forbidden_exact_sentences": [
+          "You tend to idealize the relationship first and ignore your own boundaries."
+        ],
+        "must_have_advice": true
+      }
+    }
+  ]
+}
