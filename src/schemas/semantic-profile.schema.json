@@ -5,52 +5,84 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "semantic_version",
     "top_tags",
     "top_insights"
   ],
   "properties": {
+    "semantic_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "source_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "rule_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "ref_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "insight_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      }
+    },
     "top_tags": {
       "type": "array",
-      "maxItems": 12,
+      "minItems": 1,
+      "maxItems": 20,
       "items": {
         "$ref": "#/$defs/SemanticTagRef"
       }
     },
     "top_insights": {
       "type": "array",
-      "maxItems": 8,
+      "minItems": 1,
+      "maxItems": 12,
       "items": {
-        "$ref": "#/$defs/SemanticInsightRef"
-      }
-    },
-    "dominant_themes": {
-      "type": "array",
-      "maxItems": 8,
-      "items": {
-        "type": "string",
-        "pattern": "^[a-z0-9_]+$"
-      }
-    },
-    "evidence_index": {
-      "type": "array",
-      "maxItems": 24,
-      "items": {
-        "$ref": "#/$defs/EvidenceRef"
+        "$ref": "#/$defs/InsightRef"
       }
     },
     "guardrails": {
       "type": "array",
+      "maxItems": 10,
       "items": {
-        "type": "string",
-        "enum": [
-          "time_accuracy_limited",
-          "house_claims_limited",
-          "avoid_fatalism",
-          "avoid_medical_claim",
-          "avoid_financial_claim",
-          "avoid_legal_claim",
-          "low_confidence_output"
-        ]
+        "$ref": "#/$defs/GuardrailRef"
+      }
+    },
+    "confidence_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tags": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "insights": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     }
   },
@@ -60,44 +92,34 @@
       "additionalProperties": false,
       "required": [
         "tag_code",
+        "category",
         "weight",
         "confidence"
       ],
       "properties": {
         "tag_code": {
           "type": "string",
-          "pattern": "^[a-z0-9_]+$"
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 1,
+          "maxLength": 80
         },
         "category": {
           "type": "string",
           "enum": [
-            "self",
-            "career",
-            "relationship",
-            "wealth",
-            "health",
-            "timing",
-            "purpose",
-            "spirit",
-            "personality",
-            "money",
-            "family",
-            "growth",
+            "identity",
             "emotion",
-            "decision",
-            "general",
-            "shadow"
+            "mind",
+            "relationship",
+            "career",
+            "money",
+            "creativity",
+            "family",
+            "social",
+            "growth",
+            "timing",
+            "shadow",
+            "other"
           ]
-        },
-        "weight": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
         },
         "polarity": {
           "type": [
@@ -112,53 +134,10 @@
             null
           ]
         },
-        "evidence_refs": {
-          "type": "array",
-          "maxItems": 8,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
-    },
-    "SemanticInsightRef": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "insight_code",
-        "confidence"
-      ],
-      "properties": {
-        "insight_code": {
-          "type": "string",
-          "pattern": "^[a-z0-9_]+$"
-        },
-        "title": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "maxLength": 120
-        },
-        "section": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "enum": [
-            "summary",
-            "personality",
-            "relationships",
-            "career",
-            "money",
-            "family",
-            "growth",
-            "timing",
-            "shadow",
-            "general",
-            null
-          ]
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         },
         "confidence": {
           "type": "number",
@@ -170,49 +149,147 @@
           "maxItems": 8,
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "qualifiers": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "maxLength": 80
           }
         }
       }
     },
-    "EvidenceRef": {
+    "InsightRef": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "ref_code"
+        "insight_code",
+        "category",
+        "section",
+        "confidence",
+        "evidence_refs"
       ],
       "properties": {
-        "ref_code": {
+        "insight_code": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-z0-9_]+$",
+          "minLength": 1,
+          "maxLength": 100
         },
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "maxLength": 120
-        },
-        "source": {
-          "type": [
-            "string",
-            "null"
-          ],
+        "category": {
+          "type": "string",
           "enum": [
-            "chart_result",
-            "semantic_rule",
-            "derived_ref",
-            "narrative",
-            null
+            "strength",
+            "tension",
+            "theme",
+            "opportunity",
+            "risk",
+            "growth"
+          ]
+        },
+        "section": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "personality",
+            "relationships",
+            "career",
+            "money",
+            "family",
+            "growth",
+            "timing",
+            "shadow",
+            "faq"
           ]
         },
         "confidence": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "priority": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 10
+        },
+        "tag_refs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "summary_hint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 180
+        }
+      }
+    },
+    "GuardrailRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]+$",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "affected_scopes": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "enum": [
+              "houses",
+              "angles",
+              "timing",
+              "relationships",
+              "career",
+              "money",
+              "family",
+              "overall"
+            ]
+          }
         }
       }
     }

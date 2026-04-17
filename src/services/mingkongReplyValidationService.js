@@ -88,24 +88,22 @@ const EMOTION_STATES = new Set([
   null,
 ]);
 const SEMANTIC_CATEGORIES = new Set([
-  'self',
-  'career',
-  'relationship',
-  'wealth',
-  'health',
-  'timing',
-  'purpose',
-  'spirit',
-  'personality',
-  'money',
-  'family',
-  'growth',
+  'identity',
   'emotion',
-  'decision',
-  'general',
+  'mind',
+  'relationship',
+  'career',
+  'money',
+  'creativity',
+  'family',
+  'social',
+  'growth',
+  'timing',
   'shadow',
+  'other',
 ]);
 const POLARITIES = new Set(['supportive', 'challenging', 'mixed', 'neutral', null]);
+const INSIGHT_CATEGORIES = new Set(['strength', 'tension', 'theme', 'opportunity', 'risk', 'growth']);
 const INSIGHT_SECTIONS = new Set([
   'summary',
   'personality',
@@ -116,21 +114,10 @@ const INSIGHT_SECTIONS = new Set([
   'growth',
   'timing',
   'shadow',
-  'general',
-  null,
+  'faq',
 ]);
-const EVIDENCE_SOURCES = new Set(['chart_result', 'semantic_rule', 'derived_ref', 'narrative', null]);
-const SESSION_TOPICS = TOPICS;
-const RECENT_MESSAGE_ROLES = new Set(['user', 'assistant']);
-const SEMANTIC_GUARDRAILS = new Set([
-  'time_accuracy_limited',
-  'house_claims_limited',
-  'avoid_fatalism',
-  'avoid_medical_claim',
-  'avoid_financial_claim',
-  'avoid_legal_claim',
-  'low_confidence_output',
-]);
+const GUARDRail_SEVERITIES = new Set(['info', 'warning', 'critical']);
+const GUARDRail_SCOPES = new Set(['houses', 'angles', 'timing', 'relationships', 'career', 'money', 'family', 'overall']);
 
 function isObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -149,11 +136,12 @@ function validateString(value, path, errors, options = {}) {
     minLength = 0,
     maxLength = null,
     nullable = false,
+    required = true,
     pattern = null,
   } = options;
 
   if (value == null) {
-    if (!nullable) {
+    if (required && !nullable) {
       addError(errors, path, 'is required');
     }
     return;
@@ -197,8 +185,8 @@ function validateNumber(value, path, errors, options = {}) {
     min = null,
     max = null,
     nullable = false,
-    integer = false,
     required = true,
+    integer = false,
   } = options;
 
   if (value == null) {
@@ -227,10 +215,10 @@ function validateNumber(value, path, errors, options = {}) {
 }
 
 function validateBoolean(value, path, errors, options = {}) {
-  const { required = true } = options;
+  const { required = true, nullable = false } = options;
 
   if (value == null) {
-    if (required) {
+    if (required && !nullable) {
       addError(errors, path, 'is required');
     }
     return;
@@ -244,6 +232,7 @@ function validateBoolean(value, path, errors, options = {}) {
 function validateStringArray(value, path, errors, options = {}) {
   const {
     required = false,
+    minItems = 0,
     maxItems = null,
     minLength = 0,
     maxLength = null,
@@ -262,12 +251,20 @@ function validateStringArray(value, path, errors, options = {}) {
     return;
   }
 
+  if (value.length < minItems) {
+    addError(errors, path, `must contain at least ${minItems} items`);
+  }
+
   if (typeof maxItems === 'number' && value.length > maxItems) {
     addError(errors, path, `must contain at most ${maxItems} items`);
   }
 
   value.forEach((item, index) => {
-    validateString(item, `${path}[${index}]`, errors, { minLength, maxLength, pattern });
+    validateString(item, `${path}[${index}]`, errors, {
+      minLength,
+      maxLength,
+      pattern,
+    });
   });
 }
 
@@ -301,7 +298,7 @@ function validateBalanceObject(value, path, errors, keys) {
   }
 
   keys.forEach((key) => {
-    validateNumber(value[key], `${path}.${key}`, errors, { min: 0, max: 1, required: true });
+    validateNumber(value[key], `${path}.${key}`, errors, { min: 0, max: 1 });
   });
 }
 
@@ -313,7 +310,7 @@ function validateProfileCard(value) {
     return { ok: false, errors };
   }
 
-  validateString(value.user_name, 'profile_card.user_name', errors, { minLength: 1, maxLength: 40, nullable: true });
+  validateString(value.user_name, 'profile_card.user_name', errors, { minLength: 1, maxLength: 40, nullable: true, required: false });
   validateEnum(value.language, 'profile_card.language', errors, LANGUAGES);
   validateEnum(value.tone_preference, 'profile_card.tone_preference', errors, TONE_PREFERENCES);
   validateEnum(value.time_accuracy, 'profile_card.time_accuracy', errors, TIME_ACCURACY);
@@ -349,13 +346,7 @@ function validateProfileCard(value) {
       'prefer_emotional_validation',
     ];
     if (validateStrictObject(value.user_preferences, 'profile_card.user_preferences', errors, preferenceKeys, { required: false })) {
-      validateEnum(
-        value.user_preferences.answer_length_preference,
-        'profile_card.user_preferences.answer_length_preference',
-        errors,
-        ANSWER_LENGTH_PREFERENCES,
-        { required: false },
-      );
+      validateEnum(value.user_preferences.answer_length_preference, 'profile_card.user_preferences.answer_length_preference', errors, ANSWER_LENGTH_PREFERENCES, { required: false });
       validateBoolean(value.user_preferences.avoid_fatalism, 'profile_card.user_preferences.avoid_fatalism', errors, { required: false });
       validateBoolean(value.user_preferences.prefer_actionable_advice, 'profile_card.user_preferences.prefer_actionable_advice', errors, { required: false });
       validateBoolean(value.user_preferences.prefer_emotional_validation, 'profile_card.user_preferences.prefer_emotional_validation', errors, { required: false });
@@ -369,19 +360,9 @@ function validateProfileCard(value) {
       'limit_house_based_claims_when_time_uncertain',
     ];
     if (validateStrictObject(value.guardrails, 'profile_card.guardrails', errors, guardrailKeys, { required: false })) {
-      validateBoolean(
-        value.guardrails.avoid_medical_legal_financial_certainty,
-        'profile_card.guardrails.avoid_medical_legal_financial_certainty',
-        errors,
-        { required: false },
-      );
+      validateBoolean(value.guardrails.avoid_medical_legal_financial_certainty, 'profile_card.guardrails.avoid_medical_legal_financial_certainty', errors, { required: false });
       validateBoolean(value.guardrails.mark_time_sensitive_claims, 'profile_card.guardrails.mark_time_sensitive_claims', errors, { required: false });
-      validateBoolean(
-        value.guardrails.limit_house_based_claims_when_time_uncertain,
-        'profile_card.guardrails.limit_house_based_claims_when_time_uncertain',
-        errors,
-        { required: false },
-      );
+      validateBoolean(value.guardrails.limit_house_based_claims_when_time_uncertain, 'profile_card.guardrails.limit_house_based_claims_when_time_uncertain', errors, { required: false });
     }
   }
 
@@ -390,90 +371,116 @@ function validateProfileCard(value) {
 
 function validateSemanticProfile(value) {
   const errors = [];
-  const allowedKeys = ['top_tags', 'top_insights', 'dominant_themes', 'evidence_index', 'guardrails'];
+  const allowedKeys = ['semantic_version', 'source_versions', 'top_tags', 'top_insights', 'guardrails', 'confidence_summary'];
 
   if (!validateStrictObject(value, 'semantic_profile', errors, allowedKeys)) {
     return { ok: false, errors };
   }
 
+  validateString(value.semantic_version, 'semantic_profile.semantic_version', errors, { minLength: 1, maxLength: 50 });
+
+  if (value.source_versions != null) {
+    const sourceKeys = ['engine_version', 'rule_version', 'ref_version', 'insight_version'];
+    if (validateStrictObject(value.source_versions, 'semantic_profile.source_versions', errors, sourceKeys, { required: false })) {
+      sourceKeys.forEach((key) => {
+        validateString(value.source_versions[key], `semantic_profile.source_versions.${key}`, errors, {
+          required: false,
+          minLength: 1,
+          maxLength: 50,
+        });
+      });
+    }
+  }
+
   if (!Array.isArray(value.top_tags)) {
     addError(errors, 'semantic_profile.top_tags', 'must be an array');
   } else {
-    if (value.top_tags.length > 12) {
-      addError(errors, 'semantic_profile.top_tags', 'must contain at most 12 items');
+    if (value.top_tags.length < 1) {
+      addError(errors, 'semantic_profile.top_tags', 'must contain at least 1 items');
+    }
+    if (value.top_tags.length > 20) {
+      addError(errors, 'semantic_profile.top_tags', 'must contain at most 20 items');
     }
     value.top_tags.forEach((tag, index) => {
       const path = `semantic_profile.top_tags[${index}]`;
-      const tagKeys = ['tag_code', 'category', 'weight', 'confidence', 'polarity', 'evidence_refs'];
+      const tagKeys = ['tag_code', 'category', 'polarity', 'weight', 'confidence', 'evidence_refs', 'qualifiers'];
       if (!validateStrictObject(tag, path, errors, tagKeys)) {
         return;
       }
-      validateString(tag.tag_code, `${path}.tag_code`, errors, { minLength: 1, pattern: /^[a-z0-9_]+$/ });
-      validateEnum(tag.category, `${path}.category`, errors, SEMANTIC_CATEGORIES, { required: false });
+      validateString(tag.tag_code, `${path}.tag_code`, errors, { minLength: 1, maxLength: 80, pattern: /^[a-z0-9_]+$/ });
+      validateEnum(tag.category, `${path}.category`, errors, SEMANTIC_CATEGORIES);
+      validateEnum(tag.polarity, `${path}.polarity`, errors, POLARITIES, { nullable: true, required: false });
       validateNumber(tag.weight, `${path}.weight`, errors, { min: 0, max: 1 });
       validateNumber(tag.confidence, `${path}.confidence`, errors, { min: 0, max: 1 });
-      validateEnum(tag.polarity, `${path}.polarity`, errors, POLARITIES, { nullable: true, required: false });
-      validateStringArray(tag.evidence_refs, `${path}.evidence_refs`, errors, { required: false, maxItems: 8, minLength: 1 });
+      validateStringArray(tag.evidence_refs, `${path}.evidence_refs`, errors, { required: false, maxItems: 8, minLength: 1, maxLength: 120 });
+      validateStringArray(tag.qualifiers, `${path}.qualifiers`, errors, { required: false, maxItems: 6, maxLength: 80 });
     });
   }
 
   if (!Array.isArray(value.top_insights)) {
     addError(errors, 'semantic_profile.top_insights', 'must be an array');
   } else {
-    if (value.top_insights.length > 8) {
-      addError(errors, 'semantic_profile.top_insights', 'must contain at most 8 items');
+    if (value.top_insights.length < 1) {
+      addError(errors, 'semantic_profile.top_insights', 'must contain at least 1 items');
+    }
+    if (value.top_insights.length > 12) {
+      addError(errors, 'semantic_profile.top_insights', 'must contain at most 12 items');
     }
     value.top_insights.forEach((insight, index) => {
       const path = `semantic_profile.top_insights[${index}]`;
-      const insightKeys = ['insight_code', 'title', 'section', 'confidence', 'evidence_refs'];
+      const insightKeys = ['insight_code', 'category', 'section', 'confidence', 'priority', 'tag_refs', 'evidence_refs', 'summary_hint'];
       if (!validateStrictObject(insight, path, errors, insightKeys)) {
         return;
       }
-      validateString(insight.insight_code, `${path}.insight_code`, errors, { minLength: 1, pattern: /^[a-z0-9_]+$/ });
-      validateString(insight.title, `${path}.title`, errors, { maxLength: 120, nullable: true });
-      validateEnum(insight.section, `${path}.section`, errors, INSIGHT_SECTIONS, { nullable: true, required: false });
+      validateString(insight.insight_code, `${path}.insight_code`, errors, { minLength: 1, maxLength: 100, pattern: /^[a-z0-9_]+$/ });
+      validateEnum(insight.category, `${path}.category`, errors, INSIGHT_CATEGORIES);
+      validateEnum(insight.section, `${path}.section`, errors, INSIGHT_SECTIONS);
       validateNumber(insight.confidence, `${path}.confidence`, errors, { min: 0, max: 1 });
-      validateStringArray(insight.evidence_refs, `${path}.evidence_refs`, errors, { required: false, maxItems: 8, minLength: 1 });
+      validateNumber(insight.priority, `${path}.priority`, errors, { min: 1, max: 10, integer: true, nullable: true, required: false });
+      validateStringArray(insight.tag_refs, `${path}.tag_refs`, errors, { required: false, maxItems: 8, pattern: /^[a-z0-9_]+$/ });
+      validateStringArray(insight.evidence_refs, `${path}.evidence_refs`, errors, { required: true, minItems: 1, maxItems: 12, minLength: 1, maxLength: 120 });
+      validateString(insight.summary_hint, `${path}.summary_hint`, errors, { required: false, nullable: true, maxLength: 180 });
     });
-  }
-
-  validateStringArray(value.dominant_themes, 'semantic_profile.dominant_themes', errors, {
-    required: false,
-    maxItems: 8,
-    pattern: /^[a-z0-9_]+$/,
-  });
-
-  if (value.evidence_index != null) {
-    if (!Array.isArray(value.evidence_index)) {
-      addError(errors, 'semantic_profile.evidence_index', 'must be an array');
-    } else {
-      if (value.evidence_index.length > 24) {
-        addError(errors, 'semantic_profile.evidence_index', 'must contain at most 24 items');
-      }
-      value.evidence_index.forEach((item, index) => {
-        const path = `semantic_profile.evidence_index[${index}]`;
-        const evidenceKeys = ['ref_code', 'label', 'source', 'confidence'];
-        if (!validateStrictObject(item, path, errors, evidenceKeys)) {
-          return;
-        }
-        validateString(item.ref_code, `${path}.ref_code`, errors, { minLength: 1 });
-        validateString(item.label, `${path}.label`, errors, { maxLength: 120, nullable: true });
-        validateEnum(item.source, `${path}.source`, errors, EVIDENCE_SOURCES, { nullable: true, required: false });
-        validateNumber(item.confidence, `${path}.confidence`, errors, { min: 0, max: 1, nullable: true, required: false });
-      });
-    }
   }
 
   if (value.guardrails != null) {
     if (!Array.isArray(value.guardrails)) {
       addError(errors, 'semantic_profile.guardrails', 'must be an array');
     } else {
-      if (value.guardrails.length > 8) {
-        addError(errors, 'semantic_profile.guardrails', 'must contain at most 8 items');
+      if (value.guardrails.length > 10) {
+        addError(errors, 'semantic_profile.guardrails', 'must contain at most 10 items');
       }
-      value.guardrails.forEach((item, index) => {
-        validateEnum(item, `semantic_profile.guardrails[${index}]`, errors, SEMANTIC_GUARDRAILS);
+      value.guardrails.forEach((guardrail, index) => {
+        const path = `semantic_profile.guardrails[${index}]`;
+        const guardrailKeys = ['code', 'severity', 'message', 'affected_scopes'];
+        if (!validateStrictObject(guardrail, path, errors, guardrailKeys)) {
+          return;
+        }
+        validateString(guardrail.code, `${path}.code`, errors, { minLength: 1, maxLength: 80, pattern: /^[A-Z0-9_]+$/ });
+        validateEnum(guardrail.severity, `${path}.severity`, errors, GUARDRail_SEVERITIES);
+        validateString(guardrail.message, `${path}.message`, errors, { minLength: 1, maxLength: 220 });
+        if (guardrail.affected_scopes != null) {
+          if (!Array.isArray(guardrail.affected_scopes)) {
+            addError(errors, `${path}.affected_scopes`, 'must be an array');
+          } else {
+            if (guardrail.affected_scopes.length > 8) {
+              addError(errors, `${path}.affected_scopes`, 'must contain at most 8 items');
+            }
+            guardrail.affected_scopes.forEach((scope, scopeIndex) => {
+              validateEnum(scope, `${path}.affected_scopes[${scopeIndex}]`, errors, GUARDRail_SCOPES);
+            });
+          }
+        }
       });
+    }
+  }
+
+  if (value.confidence_summary != null) {
+    const confidenceKeys = ['overall', 'tags', 'insights'];
+    if (validateStrictObject(value.confidence_summary, 'semantic_profile.confidence_summary', errors, confidenceKeys, { required: false })) {
+      validateNumber(value.confidence_summary.overall, 'semantic_profile.confidence_summary.overall', errors, { min: 0, max: 1, required: false });
+      validateNumber(value.confidence_summary.tags, 'semantic_profile.confidence_summary.tags', errors, { min: 0, max: 1, required: false });
+      validateNumber(value.confidence_summary.insights, 'semantic_profile.confidence_summary.insights', errors, { min: 0, max: 1, required: false });
     }
   }
 
@@ -503,27 +510,14 @@ function validateIntentPacket(value) {
   validateEnum(value.goal, 'intent_packet.goal', errors, GOALS);
   validateEnum(value.desired_output, 'intent_packet.desired_output', errors, DESIRED_OUTPUTS);
   validateEnum(value.emotion_state, 'intent_packet.emotion_state', errors, EMOTION_STATES, { nullable: true, required: false });
-  validateStringArray(value.priority_tags, 'intent_packet.priority_tags', errors, {
-    required: false,
-    maxItems: 8,
-    pattern: /^[a-z0-9_]+$/,
-  });
-  validateStringArray(value.priority_insights, 'intent_packet.priority_insights', errors, {
-    required: false,
-    maxItems: 5,
-    pattern: /^[a-z0-9_]+$/,
-  });
-  validateString(value.context_hint, 'intent_packet.context_hint', errors, { maxLength: 500, nullable: true });
+  validateStringArray(value.priority_tags, 'intent_packet.priority_tags', errors, { required: false, maxItems: 8, pattern: /^[a-z0-9_]+$/ });
+  validateStringArray(value.priority_insights, 'intent_packet.priority_insights', errors, { required: false, maxItems: 5, pattern: /^[a-z0-9_]+$/ });
+  validateString(value.context_hint, 'intent_packet.context_hint', errors, { maxLength: 500, nullable: true, required: false });
 
   if (value.constraints != null) {
     const constraintKeys = ['max_length_chars', 'avoid_repetition', 'avoid_followup_question', 'must_include_advice'];
     if (validateStrictObject(value.constraints, 'intent_packet.constraints', errors, constraintKeys, { required: false })) {
-      validateNumber(value.constraints.max_length_chars, 'intent_packet.constraints.max_length_chars', errors, {
-        min: 60,
-        max: 2000,
-        integer: true,
-        required: false,
-      });
+      validateNumber(value.constraints.max_length_chars, 'intent_packet.constraints.max_length_chars', errors, { min: 60, max: 2000, integer: true, required: false });
       validateBoolean(value.constraints.avoid_repetition, 'intent_packet.constraints.avoid_repetition', errors, { required: false });
       validateBoolean(value.constraints.avoid_followup_question, 'intent_packet.constraints.avoid_followup_question', errors, { required: false });
       validateBoolean(value.constraints.must_include_advice, 'intent_packet.constraints.must_include_advice', errors, { required: false });
@@ -537,49 +531,53 @@ function validateSessionState(value) {
   const errors = [];
   const allowedKeys = [
     'conversation_topic',
+    'turn_index',
     'already_explained',
     'avoid_repetition',
     'max_length_chars',
-    'recent_messages',
-    'last_reply_summary',
-    'active_report_type',
+    'recent_user_messages',
+    'last_answer_summary',
+    'resolved_points',
+    'open_questions',
+    'should_ask_followup',
+    'forbidden_phrases',
+    'response_memory',
   ];
 
   if (!validateStrictObject(value, 'session_state', errors, allowedKeys)) {
     return { ok: false, errors };
   }
 
-  validateEnum(value.conversation_topic, 'session_state.conversation_topic', errors, SESSION_TOPICS);
+  validateEnum(value.conversation_topic, 'session_state.conversation_topic', errors, TOPICS);
+  validateNumber(value.turn_index, 'session_state.turn_index', errors, { min: 1, max: 9999, integer: true, nullable: true, required: false });
+  validateStringArray(value.already_explained, 'session_state.already_explained', errors, { required: true, maxItems: 10, minLength: 1, maxLength: 220 });
   validateBoolean(value.avoid_repetition, 'session_state.avoid_repetition', errors);
-  validateNumber(value.max_length_chars, 'session_state.max_length_chars', errors, {
-    min: 60,
-    max: 2000,
-    integer: true,
-    required: false,
-  });
-  validateStringArray(value.already_explained, 'session_state.already_explained', errors, {
-    required: false,
-    maxItems: 10,
-    maxLength: 260,
-  });
-  validateString(value.last_reply_summary, 'session_state.last_reply_summary', errors, { maxLength: 500, nullable: true });
-  validateString(value.active_report_type, 'session_state.active_report_type', errors, { maxLength: 80, nullable: true });
+  validateNumber(value.max_length_chars, 'session_state.max_length_chars', errors, { min: 60, max: 2000, integer: true });
+  validateStringArray(value.recent_user_messages, 'session_state.recent_user_messages', errors, { required: false, maxItems: 5, minLength: 1, maxLength: 500 });
+  validateString(value.last_answer_summary, 'session_state.last_answer_summary', errors, { required: false, nullable: true, maxLength: 300 });
+  validateStringArray(value.resolved_points, 'session_state.resolved_points', errors, { required: false, maxItems: 8, maxLength: 120 });
+  validateStringArray(value.open_questions, 'session_state.open_questions', errors, { required: false, maxItems: 5, maxLength: 120 });
+  validateBoolean(value.should_ask_followup, 'session_state.should_ask_followup', errors, { required: false, nullable: true });
+  validateStringArray(value.forbidden_phrases, 'session_state.forbidden_phrases', errors, { required: false, maxItems: 10, maxLength: 60 });
 
-  if (value.recent_messages != null) {
-    if (!Array.isArray(value.recent_messages)) {
-      addError(errors, 'session_state.recent_messages', 'must be an array');
-    } else {
-      if (value.recent_messages.length > 12) {
-        addError(errors, 'session_state.recent_messages', 'must contain at most 12 items');
-      }
-      value.recent_messages.forEach((message, index) => {
-        const path = `session_state.recent_messages[${index}]`;
-        const messageKeys = ['role', 'content'];
-        if (!validateStrictObject(message, path, errors, messageKeys)) {
-          return;
-        }
-        validateEnum(message.role, `${path}.role`, errors, RECENT_MESSAGE_ROLES);
-        validateString(message.content, `${path}.content`, errors, { minLength: 1, maxLength: 1000 });
+  if (value.response_memory != null) {
+    const memoryKeys = ['used_insights', 'used_tags', 'last_confidence'];
+    if (validateStrictObject(value.response_memory, 'session_state.response_memory', errors, memoryKeys, { required: false })) {
+      validateStringArray(value.response_memory.used_insights, 'session_state.response_memory.used_insights', errors, {
+        required: false,
+        maxItems: 6,
+        pattern: /^[a-z0-9_]+$/,
+      });
+      validateStringArray(value.response_memory.used_tags, 'session_state.response_memory.used_tags', errors, {
+        required: false,
+        maxItems: 10,
+        pattern: /^[a-z0-9_]+$/,
+      });
+      validateNumber(value.response_memory.last_confidence, 'session_state.response_memory.last_confidence', errors, {
+        required: false,
+        nullable: true,
+        min: 0,
+        max: 1,
       });
     }
   }

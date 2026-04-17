@@ -6,7 +6,9 @@
   "additionalProperties": false,
   "required": [
     "conversation_topic",
-    "avoid_repetition"
+    "already_explained",
+    "avoid_repetition",
+    "max_length_chars"
   ],
   "properties": {
     "conversation_topic": {
@@ -24,12 +26,21 @@
         "general"
       ]
     },
+    "turn_index": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 9999
+    },
     "already_explained": {
       "type": "array",
       "maxItems": 10,
       "items": {
         "type": "string",
-        "maxLength": 260
+        "minLength": 1,
+        "maxLength": 220
       }
     },
     "avoid_repetition": {
@@ -40,45 +51,81 @@
       "minimum": 60,
       "maximum": 2000
     },
-    "recent_messages": {
+    "recent_user_messages": {
       "type": "array",
-      "maxItems": 12,
+      "maxItems": 5,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "role",
-          "content"
-        ],
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "user",
-              "assistant"
-            ]
-          },
-          "content": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 1000
-          }
-        }
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
       }
     },
-    "last_reply_summary": {
+    "last_answer_summary": {
       "type": [
         "string",
         "null"
       ],
-      "maxLength": 500
+      "maxLength": 300
     },
-    "active_report_type": {
+    "resolved_points": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "maxLength": 120
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "maxLength": 120
+      }
+    },
+    "should_ask_followup": {
       "type": [
-        "string",
+        "boolean",
         "null"
-      ],
-      "maxLength": 80
+      ]
+    },
+    "forbidden_phrases": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 60
+      }
+    },
+    "response_memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "used_insights": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "used_tags": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "last_confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
     }
   }
 }
