@@ -1,0 +1,76 @@
+name: MingSky Narrative Regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/routes/ai.js'
+      - 'src/services/openaiService.js'
+      - 'src/services/mingskyNarrativeService.js'
+      - 'src/services/__fixtures__/mingskyNarrative.*.json'
+      - 'src/schemas/mingsky-narrative-output.*'
+      - 'scripts/runMingskyNarrativeRegression.js'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [main]
+    paths:
+      - 'src/routes/ai.js'
+      - 'src/services/openaiService.js'
+      - 'src/services/mingskyNarrativeService.js'
+      - 'src/services/__fixtures__/mingskyNarrative.*.json'
+      - 'src/schemas/mingsky-narrative-output.*'
+      - 'scripts/runMingskyNarrativeRegression.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  regression:
+    name: Narrative Regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run MingSky narrative regression
+        id: regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github-artifacts
+          npm run test:mingsky-narrative | tee .github-artifacts/mingsky-narrative-regression.log
+
+      - name: Add job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## MingSky Narrative Regression'
+            echo
+            echo '- Command: `npm run test:mingsky-narrative`'
+            echo
+            echo '```text'
+            if [ -f .github-artifacts/mingsky-narrative-regression.log ]; then
+              cat .github-artifacts/mingsky-narrative-regression.log
+            else
+              echo 'No regression log generated.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mingsky-narrative-regression-log
+          path: .github-artifacts/mingsky-narrative-regression.log
