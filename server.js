@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const aiRoutes = require('./src/routes/ai');
+const v1AiRoutes = require('./src/routes/v1Ai');
 const payRoutes = require('./src/routes/pay');
 const adminRoutes = require('./src/routes/admin');
 const { DB_FILE, getMigrationMessages } = require('./src/services/quotaService');
@@ -78,6 +79,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/ai', aiRoutes);
+app.use('/v1/ai', v1AiRoutes);
 app.use('/api/pay', payRoutes);
 app.use('/admin', adminRoutes);
 

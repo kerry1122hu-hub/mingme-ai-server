@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingkong.app/schemas/mingkong-ai-reply-v1.schema.json",
+  "title": "MingKongAIReplyV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "answer",
+    "used_insights",
+    "used_tags",
+    "confidence",
+    "needs_followup",
+    "followup_question",
+    "safety_flags"
+  ],
+  "properties": {
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conclusion",
+        "explanation",
+        "advice"
+      ],
+      "properties": {
+        "conclusion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "advice": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        }
+      }
+    },
+    "used_insights": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "used_tags": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "needs_followup": {
+      "type": "boolean"
+    },
+    "followup_question": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 120
+    },
+    "safety_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "none",
+          "time_accuracy_limited",
+          "avoid_fatalism",
+          "avoid_medical_claim",
+          "avoid_financial_claim",
+          "avoid_legal_claim"
+        ]
+      }
+    }
+  }
+}

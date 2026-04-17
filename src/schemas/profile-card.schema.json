@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingkong.app/schemas/profile-card.schema.json",
+  "title": "MingKongProfileCard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "language",
+    "time_accuracy",
+    "chart_core_summary"
+  ],
+  "properties": {
+    "user_name": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "language": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 16
+    },
+    "tone_preference": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "time_accuracy": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "approximate",
+        "unknown"
+      ]
+    },
+    "chart_core_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sun_sign",
+        "moon_sign",
+        "asc_sign",
+        "dominant_planet"
+      ],
+      "properties": {
+        "sun_sign": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "moon_sign": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "asc_sign": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "dominant_planet": {
+          "type": "string",
+          "maxLength": 32
+        }
+      }
+    }
+  }
+}

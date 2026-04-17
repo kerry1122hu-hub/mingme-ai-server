@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingkong.app/schemas/intent-packet.schema.json",
+  "title": "MingKongIntentPacket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "user_question",
+    "topic",
+    "goal",
+    "desired_output"
+  ],
+  "properties": {
+    "user_question": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "topic": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "goal": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "desired_output": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "emotion_state": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "priority_tags": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "priority_insights": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    }
+  }
+}
