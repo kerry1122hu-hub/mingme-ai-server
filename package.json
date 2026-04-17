@@ -7,8 +7,11 @@
     "postinstall": "npm rebuild better-sqlite3 --build-from-source",
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "test:mingsky-narrative": "node scripts/runMingskyNarrativeRegression.js"
+    "test": "npm run test:mingkong-reply",
+    "test:mingsky-narrative": "node scripts/runMingskyNarrativeRegression.js",
+    "test:mingkong-reply": "npm run test:mingkong-reply:spec && npm run test:mingkong-reply:golden",
+    "test:mingkong-reply:spec": "tsx src/services/reply-service.spec.ts",
+    "test:mingkong-reply:golden": "tsx src/services/golden-test-runner.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,5 +25,10 @@
     "lunar-typescript": "^1.8.6",
     "multer": "^2.1.1",
     "openai": "^6.32.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }
