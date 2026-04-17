@@ -1,0 +1,60 @@
+{
+  "chart_meta": {
+    "report_title": "性格报告",
+    "headline": "在时间未知时，先看稳定而可信的主轴",
+    "summary": "这次解读会以太阳、月亮、行星结构与可稳定判断的主题为主，不把宫位和上升相关内容说得过满。",
+    "birth_date": "1988-02-14",
+    "birth_time": "",
+    "city": "高雄市 / Kaohsiung, Taiwan, China",
+    "province": "台湾",
+    "timezone": "Asia/Taipei",
+    "asc_sign": "",
+    "house_system_label": "未启用（出生时间未知）"
+  },
+  "semantic": {
+    "insights": [
+      {
+        "code": "thinking_prefers_pattern_and_strategy",
+        "title": "你更习惯先看清结构，再决定如何行动",
+        "body": "你不太会只凭一时感受就下判断，而是更倾向先观察模式、梳理信息，再形成自己的结论。",
+        "section": "personality",
+        "confidence": 0.82
+      },
+      {
+        "code": "interiority_needs_trust_and_processing_space",
+        "title": "你的情绪需要先被自己整理，才会愿意向外表达",
+        "body": "这让你显得比表面更克制，也更需要安全感和时间来确认自己的真实感受。",
+        "section": "personality",
+        "confidence": 0.79
+      }
+    ],
+    "tags": [
+      {
+        "code": "self.decision_style.analytic_patterning",
+        "label": "分析式思考",
+        "cross_system_agreement": false
+      },
+      {
+        "code": "self.temperament.deep_internalization",
+        "label": "内在消化能力",
+        "cross_system_agreement": false
+      }
+    ],
+    "evidence": [
+      { "code": "SUN_IN_AQUARIUS", "label": "SUN IN AQUARIUS", "system": "western" },
+      { "code": "MOON_IN_SCORPIO", "label": "MOON IN SCORPIO", "system": "western" },
+      { "code": "TIME_UNKNOWN", "label": "TIME UNKNOWN", "system": "input" },
+      { "code": "HOUSES_UNRELIABLE", "label": "HOUSES UNRELIABLE", "system": "guardrail" }
+    ]
+  },
+  "sections": [
+    {
+      "title": "解读边界",
+      "body": "由于出生时间未知，这次不展开上升、宫位与依赖宫位的关系/事业定位，只聚焦于较稳定的性格主轴。"
+    },
+    {
+      "title": "稳定主轴",
+      "body": "太阳与月亮的组合更说明你在表达与感受之间有明显层次，也更重视在真正确定后再行动。"
+    }
+  ]
+}
