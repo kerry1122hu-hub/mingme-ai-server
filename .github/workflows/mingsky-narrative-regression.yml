@@ -5,10 +5,23 @@ on:
     branches: [main]
     paths:
       - 'src/routes/ai.js'
+      - 'src/routes/v1Ai.js'
       - 'src/services/openaiService.js'
       - 'src/services/mingskyNarrativeService.js'
+      - 'src/services/mingkongAiReplyService.js'
+      - 'src/services/mingkongReplyValidationService.js'
+      - 'src/services/openai-payload-builder.ts'
+      - 'src/services/reply-service.ts'
+      - 'src/services/reply-service.spec.ts'
+      - 'src/services/golden-test-runner.ts'
       - 'src/services/__fixtures__/contract-pair.*.json'
+      - 'src/services/__fixtures__/golden-test-cases.v1.json'
       - 'src/schemas/mingsky-narrative-output.*'
+      - 'src/schemas/profile-card.schema.json'
+      - 'src/schemas/intent-packet.schema.json'
+      - 'src/schemas/semantic-profile.schema.json'
+      - 'src/schemas/session-state.schema.json'
+      - 'src/schemas/mingkong-ai-reply-v1.schema.json'
       - 'scripts/runMingskyNarrativeRegression.js'
       - 'package.json'
       - 'package-lock.json'
@@ -16,10 +29,23 @@ on:
     branches: [main]
     paths:
       - 'src/routes/ai.js'
+      - 'src/routes/v1Ai.js'
       - 'src/services/openaiService.js'
       - 'src/services/mingskyNarrativeService.js'
+      - 'src/services/mingkongAiReplyService.js'
+      - 'src/services/mingkongReplyValidationService.js'
+      - 'src/services/openai-payload-builder.ts'
+      - 'src/services/reply-service.ts'
+      - 'src/services/reply-service.spec.ts'
+      - 'src/services/golden-test-runner.ts'
       - 'src/services/__fixtures__/contract-pair.*.json'
+      - 'src/services/__fixtures__/golden-test-cases.v1.json'
       - 'src/schemas/mingsky-narrative-output.*'
+      - 'src/schemas/profile-card.schema.json'
+      - 'src/schemas/intent-packet.schema.json'
+      - 'src/schemas/semantic-profile.schema.json'
+      - 'src/schemas/session-state.schema.json'
+      - 'src/schemas/mingkong-ai-reply-v1.schema.json'
       - 'scripts/runMingskyNarrativeRegression.js'
       - 'package.json'
       - 'package-lock.json'
@@ -50,6 +76,14 @@ jobs:
           mkdir -p .github-artifacts
           npm run test:mingsky-narrative | tee .github-artifacts/mingsky-narrative-regression.log
 
+      - name: Run MingKong reply regression
+        id: mingkong_reply_regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github-artifacts
+          npm run test:mingkong-reply | tee .github-artifacts/mingkong-reply-regression.log
+
       - name: Add job summary
         if: always()
         shell: bash
@@ -66,6 +100,18 @@ jobs:
               echo 'No regression log generated.'
             fi
             echo '```'
+            echo
+            echo '## MingKong Reply Regression'
+            echo
+            echo '- Command: `npm run test:mingkong-reply`'
+            echo
+            echo '```text'
+            if [ -f .github-artifacts/mingkong-reply-regression.log ]; then
+              cat .github-artifacts/mingkong-reply-regression.log
+            else
+              echo 'No MingKong reply regression log generated.'
+            fi
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload regression log
@@ -74,3 +120,10 @@ jobs:
         with:
           name: mingsky-narrative-regression-log
           path: .github-artifacts/mingsky-narrative-regression.log
+
+      - name: Upload MingKong reply regression log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mingkong-reply-regression-log
+          path: .github-artifacts/mingkong-reply-regression.log
