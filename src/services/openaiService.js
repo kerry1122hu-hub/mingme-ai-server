@@ -10,6 +10,11 @@ const {
   normalizeMingSkyNarrativeOutput: normalizeMingSkyNarrativeOutputV1,
   tryParseJson: tryParseJsonV1,
 } = require('./mingskyNarrativeService');
+const {
+  buildMingSkyChatPrompt,
+  normalizeHistory: normalizeMingSkyChatHistory,
+  normalizeMingSkyChatOutput,
+} = require('./mingskyChatService');
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -1867,6 +1872,43 @@ async function runMingSkyNarrative({ payload, model = DEFAULT_MODEL }) {
   return normalizeMingSkyNarrativeOutputV1(parsed, payload);
 }
 
+async function runMingSkyChat({ payload, message, history = [], model = DEFAULT_MODEL }) {
+  ensureOpenAIKey();
+
+  const normalizedHistory = normalizeMingSkyChatHistory(history);
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.72,
+    max_completion_tokens: 520,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are the dedicated MingSky Astrology chart assistant. Answer in Chinese, stay faithful to the supplied payload, and do not invent chart facts.',
+      },
+      {
+        role: 'system',
+        content: buildMingSkyChatPrompt(payload, message),
+      },
+      ...normalizedHistory,
+      {
+        role: 'user',
+        content: textOf(message),
+      },
+    ],
+  });
+
+  const reply = sanitizeAiResponse(response.choices?.[0]?.message?.content || '');
+  return normalizeMingSkyChatOutput(
+    {
+      reply,
+      suggested_questions: payload?.suggested_questions || [],
+    },
+    {
+      suggested_questions: payload?.suggested_questions || [],
+    },
+  );
+}
+
 async function runXiaoLiuRenReading({
   question = '',
   chart,
@@ -2006,6 +2048,7 @@ module.exports = {
   buildLLMUserPrompt,
   runChat,
   runReading,
+  runMingSkyChat,
   runMingSkyNarrative,
   runXiaoLiuRenReading,
   runTranscription,

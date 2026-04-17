@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mingsky.app/schemas/mingsky-chat-output.schema.json",
+  "title": "MingSkyChatOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reply",
+    "suggested_questions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mingsky-chat-output.v1"
+    },
+    "reply": {
+      "type": "string",
+      "minLength": 1
+    },
+    "suggested_questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 3
+    }
+  }
+}
