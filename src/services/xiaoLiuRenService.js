@@ -800,6 +800,245 @@ function calculateSecondaryIndex(day, timeNumber) {
   return raw < 0 ? raw + 6 : raw;
 }
 
+const PALACE_DECISION_META = {
+  da_an: {
+    modern_name: '稳定期',
+    decision_score: 86,
+    element: '木',
+    direction: '东方',
+    color: '青色',
+    decision_hint: '局势有承接力，适合稳住基本盘后推进。',
+  },
+  liu_lian: {
+    modern_name: '等待期',
+    decision_score: 42,
+    element: '水',
+    direction: '北方',
+    color: '黑色',
+    decision_hint: '节奏偏慢，先补信息、补手续、补准备。',
+  },
+  su_xi: {
+    modern_name: '机会窗口',
+    decision_score: 88,
+    element: '火',
+    direction: '南方',
+    color: '赤色',
+    decision_hint: '动象已起，适合抓窗口快速推进。',
+  },
+  chi_kou: {
+    modern_name: '风险提醒',
+    decision_score: 32,
+    element: '金',
+    direction: '西方',
+    color: '白色',
+    decision_hint: '风险多在口舌、分歧和表达方式，宜降火留痕。',
+  },
+  xiao_ji: {
+    modern_name: '合作窗口',
+    decision_score: 76,
+    element: '木',
+    direction: '东南',
+    color: '绿色',
+    decision_hint: '适合小步推进、借力协同、先做轻量验证。',
+  },
+  kong_wang: {
+    modern_name: '休整期',
+    decision_score: 18,
+    element: '土',
+    direction: '中央',
+    color: '黄色',
+    decision_hint: '信号偏虚，宜暂停、复核信息，避免重投入。',
+  },
+};
+
+const STEM_ELEMENT = {
+  甲: '木',
+  乙: '木',
+  丙: '火',
+  丁: '火',
+  戊: '土',
+  己: '土',
+  庚: '金',
+  辛: '金',
+  壬: '水',
+  癸: '水',
+};
+
+const ELEMENT_GENERATES = {
+  木: '火',
+  火: '土',
+  土: '金',
+  金: '水',
+  水: '木',
+};
+
+const ELEMENT_CONTROLS = {
+  木: '土',
+  土: '水',
+  水: '火',
+  火: '金',
+  金: '木',
+};
+
+function getDecisionMeta(palaceCode = '') {
+  return PALACE_DECISION_META[palaceCode] || {
+    modern_name: '待辨期',
+    decision_score: 50,
+    element: '',
+    direction: '',
+    color: '',
+    decision_hint: '信息还不够完整，宜先确认现实条件。',
+  };
+}
+
+function calculateMonthRawIndex(month) {
+  const raw = Number(month) % 6;
+  return raw < 0 ? raw + 6 : raw;
+}
+
+function calculateDayRawIndex(month, day) {
+  const raw = (Number(month) + Number(day) - 1) % 6;
+  return raw < 0 ? raw + 6 : raw;
+}
+
+function enrichTimelinePalace({ phase, label, rawIndex, palace, meta }) {
+  return {
+    phase,
+    label,
+    raw_index: rawIndex,
+    palace_code: palace?.palace_code || '',
+    palace_name: palace?.palace_name || '',
+    fortune_level: palace?.fortune_level || '',
+    modern_name: meta?.modern_name || '',
+    decision_score: meta?.decision_score || null,
+    element: meta?.element || '',
+    direction: meta?.direction || '',
+    color: meta?.color || '',
+    summary: palace?.summary || meta?.decision_hint || '',
+    decision_hint: meta?.decision_hint || '',
+  };
+}
+
+function buildThreePalaceTimeline({ config, engineVersion, lunarMonth, lunarDay, timeNumber, mainRawIndex }) {
+  const monthRawIndex = calculateMonthRawIndex(lunarMonth);
+  const dayRawIndex = calculateDayRawIndex(lunarMonth, lunarDay);
+  const finalRawIndex = typeof mainRawIndex === 'number'
+    ? mainRawIndex
+    : calculateRawIndex(lunarMonth, lunarDay, timeNumber);
+  const steps = [
+    { phase: 'background', label: '起因/背景', rawIndex: monthRawIndex },
+    { phase: 'process', label: '过程/变化', rawIndex: dayRawIndex },
+    { phase: 'outcome', label: '结果/定论', rawIndex: finalRawIndex },
+  ];
+  return steps.map((step) => {
+    const palaceCode = config.palace_order[step.rawIndex] || '';
+    const palace = palaceCode ? getPalaceByCode(engineVersion, palaceCode) : null;
+    return enrichTimelinePalace({
+      ...step,
+      palace,
+      meta: getDecisionMeta(palaceCode),
+    });
+  });
+}
+
+function inferDayMasterElement(chart = {}) {
+  const direct = [
+    chart?.dayWuXing,
+    chart?.dayElement,
+    chart?.dayMasterElement,
+    chart?.dayMaster?.element,
+    chart?.profile?.dayWuXing,
+  ].find((item) => `${item || ''}`.trim());
+  if (direct) return `${direct}`.trim().slice(0, 1);
+  const dayMaster = `${chart?.dayMaster || chart?.pillars?.day || chart?.dayPillar || ''}`.trim();
+  const stem = dayMaster.slice(0, 1);
+  return STEM_ELEMENT[stem] || '';
+}
+
+function describeElementRelation(dayElement = '', palaceElement = '') {
+  if (!dayElement || !palaceElement) {
+    return {
+      relation: '信息不足',
+      title: '命盘联动不足',
+      advice: '系统暂未拿到稳定的日主五行，这一卦先按小六壬本身判断。',
+    };
+  }
+  if (dayElement === palaceElement) {
+    return {
+      relation: '同气相扶',
+      title: '此卦与日主同气',
+      advice: '这件事会牵动你的本能反应，适合按熟悉的方法稳住节奏，但也要防止固执。',
+    };
+  }
+  if (ELEMENT_GENERATES[palaceElement] === dayElement) {
+    return {
+      relation: '外力生扶',
+      title: '此卦对你有助力',
+      advice: '外部条件更容易给你托举，适合借势、借人、借流程，不必完全靠硬撑。',
+    };
+  }
+  if (ELEMENT_GENERATES[dayElement] === palaceElement) {
+    return {
+      relation: '泄气成事',
+      title: '此事会消耗你的气力',
+      advice: '做得成也会耗心力，适合先控成本、控时间，再决定是否加码。',
+    };
+  }
+  if (ELEMENT_CONTROLS[dayElement] === palaceElement) {
+    return {
+      relation: '主动可控',
+      title: '此事可由你主动定节奏',
+      advice: '你有一定掌控力，但不宜用力过猛，先设边界，再推进关键动作。',
+    };
+  }
+  if (ELEMENT_CONTROLS[palaceElement] === dayElement) {
+    return {
+      relation: '压力临身',
+      title: '此事对你形成压力',
+      advice: '这件事会给你带来约束或压力，宜先降风险、留后手，不要在情绪里拍板。',
+    };
+  }
+  return {
+    relation: '气机相隔',
+    title: '此事与日主不直接相接',
+    advice: '这件事未必马上落到你身上，先看现实反馈，再决定投入深浅。',
+  };
+}
+
+function buildBaziLinkage(chart, palaceMeta, sceneType) {
+  const dayMasterElement = inferDayMasterElement(chart);
+  const palaceElement = palaceMeta?.element || '';
+  const relation = describeElementRelation(dayMasterElement, palaceElement);
+  return {
+    day_master_element: dayMasterElement,
+    palace_element: palaceElement,
+    scene_type: sceneType,
+    relation: relation.relation,
+    title: relation.title,
+    advice: relation.advice,
+  };
+}
+
+function buildInstantDecisionPayload({ mainPalace, secondaryPalace, comboMapping, timeline, baziLinkage }) {
+  const mainMeta = getDecisionMeta(mainPalace?.palace_code);
+  const secondaryMeta = getDecisionMeta(secondaryPalace?.palace_code);
+  const score = Math.round((mainMeta.decision_score || 50) * 0.7 + (secondaryMeta.decision_score || mainMeta.decision_score || 50) * 0.3);
+  return {
+    engine_name: '明己即时决策引擎',
+    decision_score: score,
+    modern_result: mainMeta.modern_name,
+    main_modern_name: mainMeta.modern_name,
+    secondary_modern_name: secondaryPalace ? secondaryMeta.modern_name : '',
+    combo_level: comboMapping?.combo_level || '',
+    direction: mainMeta.direction,
+    color: mainMeta.color,
+    element: mainMeta.element,
+    decision_hint: mainMeta.decision_hint,
+    three_palace_timeline: timeline,
+    bazi_linkage: baziLinkage,
+  };
+}
+
 function normalizeDivinationTier(memberTier = '') {
   const tier = `${memberTier || ''}`.trim().toLowerCase();
   if (!tier) return 'free';
@@ -1122,6 +1361,15 @@ function runXiaoLiuRenEngine({
   const secondaryPalace = secondaryPalaceCode ? getPalaceByCode(engineVersion, secondaryPalaceCode) : null;
   const sceneMapping = getSceneMapping(resolvedSceneType, mainPalaceCode);
   const comboMapping = secondaryPalaceCode ? getDoubleMapping(mainPalaceCode, secondaryPalaceCode) : null;
+  const threePalaceTimeline = buildThreePalaceTimeline({
+    config,
+    engineVersion,
+    lunarMonth: localMonth,
+    lunarDay: localDay,
+    timeNumber: timeBranch.num,
+    mainRawIndex,
+  });
+  const baziLinkage = buildBaziLinkage(chart, getDecisionMeta(mainPalaceCode), resolvedSceneType);
   const sceneStandardPacket = buildSceneStandardPacket(
     resolvedSceneType,
     SCENE_FALLBACKS[resolvedSceneType] || resolvedSceneType,
@@ -1129,6 +1377,13 @@ function runXiaoLiuRenEngine({
     sceneMapping
   );
   const doublePalaceResult = buildDoublePalacePacket(mainPalace, secondaryPalace, comboMapping);
+  const instantDecision = buildInstantDecisionPayload({
+    mainPalace,
+    secondaryPalace,
+    comboMapping,
+    timeline: threePalaceTimeline,
+    baziLinkage,
+  });
   const riskConfig = db.prepare(`
     SELECT *
     FROM risk_control_config
@@ -1151,6 +1406,8 @@ function runXiaoLiuRenEngine({
     avoid: (sceneStandardPacket?.avoid || []).slice(0, 4),
     short_output: sceneStandardPacket?.short_output || '',
     one_line_summary: mainPalace?.summary || '',
+    modern_result: instantDecision.modern_result,
+    decision_score: instantDecision.decision_score,
   };
 
   const normalizedPayload = {
@@ -1190,6 +1447,7 @@ function runXiaoLiuRenEngine({
       secondary_button: '稍后再看',
     },
     double_palace_result: doublePalaceResult,
+    instant_decision: instantDecision,
   };
 
   return {
@@ -1217,6 +1475,11 @@ function runXiaoLiuRenEngine({
     sceneStandardPacket,
     comboMapping,
     doublePalaceResult,
+    instantDecision,
+    threePalaceTimeline,
+    decisionScore: instantDecision.decision_score,
+    modernResult: instantDecision.modern_result,
+    baziLinkage,
     riskConfig: riskConfig || null,
     summary: comboMapping?.short_output || sceneMapping?.short_output || mainPalace?.summary || '',
     recommended: Array.from(new Set([

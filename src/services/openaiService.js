@@ -1945,6 +1945,20 @@ async function runXiaoLiuRenReading({
       : '',
     engineResult?.comboMapping ? `- 组合判断：${textOf(engineResult?.comboMapping?.judgment)}` : '',
     engineResult?.comboMapping ? `- 趋势说明：${textOf(engineResult?.comboMapping?.trend)}` : '',
+    engineResult?.instantDecision
+      ? [
+          '【即时决策增强】',
+          `- 现代状态：${textOf(engineResult.instantDecision.modern_result)}`,
+          `- 决策评分：${textOf(engineResult.instantDecision.decision_score)}/100`,
+          `- 行动提示：${textOf(engineResult.instantDecision.decision_hint)}`,
+          engineResult?.threePalaceTimeline?.length
+            ? `- 三宫链路：${engineResult.threePalaceTimeline.map((item) => `${textOf(item.label)}=${textOf(item.palace_name)}(${textOf(item.modern_name)})`).join('；')}`
+            : '',
+          engineResult?.baziLinkage?.advice
+            ? `- 八字联动：日主五行${textOf(engineResult.baziLinkage.day_master_element, '未明')}，卦象五行${textOf(engineResult.baziLinkage.palace_element, '未明')}，关系为${textOf(engineResult.baziLinkage.relation)}；${textOf(engineResult.baziLinkage.advice)}`
+            : '',
+        ].filter(Boolean).join('\n')
+      : '',
     `- 宜：${toList(engineResult?.recommended).join('、') || '未提供'}`,
     `- 忌：${toList(engineResult?.avoid).join('、') || '未提供'}`,
     '【起卦时点】',
