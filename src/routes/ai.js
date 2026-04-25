@@ -11,6 +11,7 @@ const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { saveContactMessage } = require('../services/contactMessageService');
+const { notifyOpenClawNewContact } = require('../services/openclawNotifyService');
 const { runXiaoLiuRenEngine, consumeXiaoLiuRenQuota } = require('../services/xiaoLiuRenService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
@@ -411,6 +412,19 @@ router.post('/contact-mingji', async (req, res) => {
       userKey,
       chart,
       source,
+    });
+
+    void notifyOpenClawNewContact({
+      ...contact,
+      nickname: `${registration?.nickname || ''}`.trim(),
+      city: `${registration?.city || ''}`.trim(),
+      focus: `${registration?.focus || ''}`.trim(),
+      email: `${registration?.email || ''}`.trim(),
+      phone: `${registration?.phone || ''}`.trim(),
+      message: `${message || ''}`.trim(),
+      source: `${source || 'member_contact'}`.trim() || 'member_contact',
+    }).catch((error) => {
+      console.error('[openclaw] failed to notify new contact message:', error);
     });
 
     res.locals.outputLength = JSON.stringify(contact).length;

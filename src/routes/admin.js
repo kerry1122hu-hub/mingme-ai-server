@@ -16,7 +16,11 @@ const { listAnalyticsEvents } = require('../services/analyticsService');
 const { listPaywallLeads } = require('../services/paywallLeadService');
 const { listManualPaymentReviews, approveManualPaymentReview } = require('../services/manualPaymentService');
 const { listPaymentOrders, markOrderPaid } = require('../services/paymentService');
-const { listContactMessages } = require('../services/contactMessageService');
+const {
+  listContactMessages,
+  updateContactMessageStatus,
+  getContactMessageStats,
+} = require('../services/contactMessageService');
 const {
   getXiaoLiuRenMemoryAdmin,
   listXiaoLiuRenUsage,
@@ -213,6 +217,32 @@ router.get('/api/contact-messages', (req, res) => {
   }
 });
 
+router.get('/api/contact-message-stats', (req, res) => {
+  try {
+    const stats = getContactMessageStats();
+    res.locals.outputLength = JSON.stringify(stats).length;
+    return res.json(ok({ stats }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/api/contact-message-status', (req, res) => {
+  try {
+    const { id, status = 'handled' } = req.body || {};
+    if (!id) {
+      return res.status(400).json(fail('id is required', 'BAD_REQUEST'));
+    }
+    const item = updateContactMessageStatus({ id, status });
+    res.locals.outputLength = JSON.stringify(item).length;
+    return res.json(ok({ item }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(400).json(fail(error.message || 'update contact message failed', 'UPDATE_CONTACT_MESSAGE_FAILED'));
+  }
+});
+
 router.get('/api/payment-orders', (req, res) => {
   try {
     const items = listPaymentOrders({ limit: req.query?.limit || 100 });
@@ -382,6 +412,8 @@ router.get('/ai-usage', (req, res) => {
     .tag-expiring { background: rgba(255, 214, 153, 0.34); color: #8b5a00; }
     .tag-idle { background: rgba(214, 220, 230, 0.55); color: #52606d; }
     .tag-other { background: rgba(213, 227, 250, 0.55); color: #34537a; }
+    .tag-pending { background: rgba(255, 98, 98, 0.14); color: #b13a3a; }
+    .tag-handled { background: rgba(110, 207, 192, 0.16); color: #21695f; }
     .muted { color: #66807c; }
     .form { display: grid; gap: 12px; }
     .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
@@ -395,6 +427,9 @@ router.get('/ai-usage', (req, res) => {
     .storage-card { background: rgba(255,255,255,.82); border-radius: 18px; padding: 14px; border: 1px solid rgba(117, 170, 160, 0.18); }
     .storage-label { font-size: 12px; color: #66807c; margin-bottom: 6px; }
     .storage-value { font-size: 14px; line-height: 1.6; color: #18322e; word-break: break-all; }
+    .section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .alert-dot { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 8px; border-radius: 999px; background: linear-gradient(135deg, #ff7a7a, #d94a4a); color: #fff; font-size: 12px; font-weight: 800; box-shadow: 0 10px 20px rgba(217, 74, 74, 0.18); }
+    .ghost-button { border-radius: 10px; border: 1px solid rgba(117,170,160,0.24); background: rgba(255,255,255,.88); color: #315d57; padding: 8px 12px; cursor: pointer; font-weight: 700; }
     @media (max-width: 900px) { .grid, .admin-shell { grid-template-columns: 1fr; } .row, .row3 { grid-template-columns: 1fr; } .admin-sidebar { position: static; } }
   </style>
 </head>
@@ -429,6 +464,10 @@ router.get('/ai-usage', (req, res) => {
         <div class="storage-card">
           <div class="storage-label">持久化状态</div>
           <div class="storage-value" id="storageStatusValue">加载中...</div>
+        </div>
+        <div class="storage-card">
+          <div class="storage-label">未处理留言</div>
+          <div class="storage-value" id="contactPendingValue">加载中...</div>
         </div>
       </div>
       <div class="status" id="topStatus"></div>
@@ -613,7 +652,14 @@ router.get('/ai-usage', (req, res) => {
           <tbody id="leadBody"></tbody>
         </table>
 
-        <h2 style="margin-top:20px;">联系明己留言</h2>
+        <div class="section-title-row" style="margin-top:20px;">
+          <h2 style="margin:0;">联系明己留言</h2>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span id="contactPendingDot" class="alert-dot" style="display:none;">0</span>
+            <span class="pill tag-pending">待处理 <span id="contactPendingBadge" style="margin-left:6px;">0</span></span>
+            <span class="muted" id="contactRecentHint">最近 24 小时 0 条</span>
+          </div>
+        </div>
         <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
           <input id="contactMessageSearch" placeholder="搜索 userKey / 昵称 / 邮箱 / 手机号 / 留言内容" />
         </div>
@@ -625,6 +671,7 @@ router.get('/ai-usage', (req, res) => {
               <th>联系方式</th>
               <th>主题</th>
               <th>留言内容</th>
+              <th>状态 / 操作</th>
             </tr>
           </thead>
           <tbody id="contactMessageBody"></tbody>
@@ -681,6 +728,10 @@ router.get('/ai-usage', (req, res) => {
     const leadBody = document.getElementById('leadBody');
     const contactMessageBody = document.getElementById('contactMessageBody');
     const contactMessageSearch = document.getElementById('contactMessageSearch');
+    const contactPendingValue = document.getElementById('contactPendingValue');
+    const contactPendingBadge = document.getElementById('contactPendingBadge');
+    const contactPendingDot = document.getElementById('contactPendingDot');
+    const contactRecentHint = document.getElementById('contactRecentHint');
     const manualPaymentBody = document.getElementById('manualPaymentBody');
     const approvedPaymentBody = document.getElementById('approvedPaymentBody');
     const leadRecentValue = document.getElementById('leadRecentValue');
@@ -706,6 +757,7 @@ router.get('/ai-usage', (req, res) => {
     let latestMysticToolItems = [];
     let latestLeadItems = [];
     let latestContactMessageItems = [];
+    let latestContactMessageStats = { totalCount: 0, pendingCount: 0, recent24hCount: 0 };
     let latestManualPaymentItems = [];
     let latestApprovedPaymentItems = [];
 
@@ -1320,6 +1372,23 @@ router.get('/ai-usage', (req, res) => {
       });
     }
 
+    function renderContactMessageStats(stats) {
+      latestContactMessageStats = {
+        totalCount: Number(stats?.totalCount || 0),
+        pendingCount: Number(stats?.pendingCount || 0),
+        recent24hCount: Number(stats?.recent24hCount || 0),
+      };
+
+      contactPendingValue.textContent = latestContactMessageStats.pendingCount > 0
+        ? latestContactMessageStats.pendingCount + ' 条待处理'
+        : '暂无待处理留言';
+      contactPendingValue.style.color = latestContactMessageStats.pendingCount > 0 ? '#b13a3a' : '#2c6d66';
+      contactPendingBadge.textContent = String(latestContactMessageStats.pendingCount || 0);
+      contactPendingDot.textContent = String(latestContactMessageStats.pendingCount || 0);
+      contactPendingDot.style.display = latestContactMessageStats.pendingCount > 0 ? 'inline-flex' : 'none';
+      contactRecentHint.textContent = '最近 24 小时 ' + latestContactMessageStats.recent24hCount + ' 条';
+    }
+
     function renderContactMessages(items) {
       latestContactMessageItems = Array.isArray(items) ? items : [];
       const filteredItems = getFilteredContactMessages(latestContactMessageItems);
@@ -1331,9 +1400,15 @@ router.get('/ai-usage', (req, res) => {
             '<td><div>' + (item.email || '未留邮箱') + '</div><div class="muted">' + (item.phone || '未留手机号') + '</div></td>' +
             '<td>' + (item.topic || '未填写主题') + '</td>' +
             '<td><div>' + (item.message || '暂无内容') + '</div><div class="muted" style="margin-top:6px;">' + (item.source || 'member_contact') + '</div></td>' +
+            '<td>'
+              + '<div><span class="pill ' + (item.status === 'pending' ? 'tag-pending' : 'tag-handled') + '">' + (item.status === 'pending' ? '待处理' : '已处理') + '</span></div>'
+              + (item.status === 'pending'
+                ? '<button data-contact-handled="' + item.id + '" class="ghost-button" style="margin-top:8px;">标记已处理</button>'
+                : '<div class="muted" style="margin-top:8px;">已完成跟进</div>')
+            + '</td>' +
           '</tr>'
         )).join('')
-        : '<tr><td colspan="5" class="muted">还没有联系明己留言。</td></tr>';
+        : '<tr><td colspan="6" class="muted">还没有联系明己留言。</td></tr>';
     }
 
     function renderManualPaymentReviews(items) {
@@ -1418,10 +1493,24 @@ router.get('/ai-usage', (req, res) => {
       }
     }
 
+    async function markContactMessageHandled(id) {
+      topStatus.textContent = '正在更新留言状态...';
+      try {
+        await requestJson('/admin/api/contact-message-status', {
+          method: 'POST',
+          body: JSON.stringify({ id, status: 'handled' }),
+        });
+        topStatus.textContent = '留言已标记为已处理。';
+        await loadOverview();
+      } catch (error) {
+        topStatus.textContent = '更新留言状态失败：' + error.message;
+      }
+    }
+
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, divinations, analytics, storage, leads, contactMessages, manualPayments, approvedManualPayments] = await Promise.all([
+        const [usage, memberships, memories, divinations, analytics, storage, leads, contactMessages, contactMessageStats, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
@@ -1430,6 +1519,7 @@ router.get('/ai-usage', (req, res) => {
           requestJson('/admin/api/storage-status'),
           requestJson('/admin/api/paywall-leads'),
           requestJson('/admin/api/contact-messages'),
+          requestJson('/admin/api/contact-message-stats'),
           requestJson('/admin/api/manual-payment-reviews?status=pending'),
           requestJson('/admin/api/manual-payment-reviews?status=approved'),
         ]);
@@ -1481,6 +1571,7 @@ router.get('/ai-usage', (req, res) => {
         }));
         renderStorage(storage.storage || {});
         renderPaywallLeads(leads.items || []);
+        renderContactMessageStats(contactMessageStats.stats || {});
         renderContactMessages(contactMessages.items || []);
         renderManualPaymentReviews(manualPayments.items || []);
         renderApprovedPaymentReviews(approvedManualPayments.items || []);
@@ -1633,6 +1724,11 @@ router.get('/ai-usage', (req, res) => {
       const reviewId = event.target?.getAttribute?.('data-approve-review');
       if (reviewId) {
         approveManualPayment(reviewId);
+        return;
+      }
+      const contactId = event.target?.getAttribute?.('data-contact-handled');
+      if (contactId) {
+        markContactMessageHandled(contactId);
         return;
       }
       const membershipKey = event.target?.getAttribute?.('data-toggle-membership');

@@ -121,7 +121,82 @@ function listContactMessages({ limit = 100 } = {}) {
   }));
 }
 
+function updateContactMessageStatus({ id, status = 'handled' } = {}) {
+  const normalizedId = Number(id || 0);
+  const normalizedStatus = `${status || 'handled'}`.trim() || 'handled';
+
+  if (!normalizedId) {
+    throw new Error('id is required');
+  }
+
+  const result = db.prepare(`
+    UPDATE contact_messages
+    SET status = ?
+    WHERE id = ?
+  `).run(normalizedStatus, normalizedId);
+
+  if (!result.changes) {
+    throw new Error('contact message not found');
+  }
+
+  const row = db.prepare(`
+    SELECT
+      id,
+      user_key,
+      source,
+      status,
+      nickname,
+      city,
+      focus,
+      email,
+      phone,
+      topic,
+      message,
+      created_at
+    FROM contact_messages
+    WHERE id = ?
+  `).get(normalizedId);
+
+  return {
+    id: row.id,
+    userKey: row.user_key,
+    source: row.source,
+    status: row.status,
+    nickname: row.nickname,
+    city: row.city,
+    focus: row.focus,
+    email: row.email,
+    phone: row.phone,
+    topic: row.topic,
+    message: row.message,
+    createdAt: row.created_at,
+  };
+}
+
+function getContactMessageStats() {
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+      SUM(
+        CASE
+          WHEN datetime(created_at) >= datetime('now', '-24 hours') THEN 1
+          ELSE 0
+        END
+      ) AS recent_24h_count
+    FROM contact_messages
+  `).get();
+
+  return {
+    totalCount: Number(row?.total_count || 0),
+    pendingCount: Number(row?.pending_count || 0),
+    recent24hCount: Number(row?.recent_24h_count || 0),
+  };
+}
+
 module.exports = {
   saveContactMessage,
   listContactMessages,
+  updateContactMessageStatus,
+  getContactMessageStats,
 };
