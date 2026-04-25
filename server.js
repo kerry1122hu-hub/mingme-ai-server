@@ -6,6 +6,7 @@ const v1AiRoutes = require('./src/routes/v1Ai');
 const payRoutes = require('./src/routes/pay');
 const adminRoutes = require('./src/routes/admin');
 const { DB_FILE, getMigrationMessages } = require('./src/services/quotaService');
+const { notifyOpenClawNonBlocking } = require('./src/services/openclawWebhookService');
 
 const app = express();
 
@@ -17,10 +18,22 @@ function captureRawBody(req, res, buffer) {
 
 process.on('uncaughtException', (error) => {
   console.error('[startup] Uncaught Exception:', error);
+  notifyOpenClawNonBlocking('app.error', 'MingMe', {
+    route: 'uncaughtException',
+    code: 'UNCAUGHT_EXCEPTION',
+    message: error?.message || 'uncaught exception',
+    severity: 'critical',
+  });
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[startup] Unhandled Rejection:', reason);
+  notifyOpenClawNonBlocking('app.error', 'MingMe', {
+    route: 'unhandledRejection',
+    code: 'UNHANDLED_REJECTION',
+    message: reason?.message || `${reason || 'unhandled rejection'}`,
+    severity: 'critical',
+  });
 });
 
 function formatApiLabel(url = '') {
@@ -75,6 +88,11 @@ app.head('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  notifyOpenClawNonBlocking('app.health', 'MingMe', {
+    status: 'ok',
+    route: '/health',
+    method: 'GET',
+  });
   res.json({ ok: true, message: 'MingMe AI server is running' });
 });
 
@@ -93,4 +111,10 @@ app.listen(port, () => {
   } else {
     console.log('数据库迁移完成：当前结构已是最新版本');
   }
+  notifyOpenClawNonBlocking('app.health', 'MingMe', {
+    status: 'running',
+    port,
+    route: 'startup',
+    environment: process.env.RENDER ? 'render' : 'local',
+  });
 });

@@ -12,6 +12,7 @@ const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { saveContactMessage } = require('../services/contactMessageService');
 const { notifyOpenClawNewContact } = require('../services/openclawNotifyService');
+const { notifyOpenClawNonBlocking } = require('../services/openclawWebhookService');
 const { runXiaoLiuRenEngine, consumeXiaoLiuRenQuota } = require('../services/xiaoLiuRenService');
 const { requireAppToken } = require('../utils/auth');
 const { ok, fail } = require('../utils/response');
@@ -286,9 +287,56 @@ router.post('/registration-trial', async (req, res) => {
       trialDays: 30,
     });
 
+    notifyOpenClawNonBlocking('user.signup', 'MingMe', {
+      userKey: userKey || membership?.userKey || '',
+      nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+      city: `${registration?.city || profile?.city || ''}`.trim(),
+      focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+      email: `${registration?.email || profile?.email || ''}`.trim(),
+      phone: `${registration?.phone || profile?.phone || ''}`.trim(),
+      memberTier: membership?.tier || 'trial',
+      status: membership?.status || 'active',
+      source: 'registration_trial',
+    });
+
     res.locals.outputLength = JSON.stringify(membership).length;
     return res.json(ok({ membership }));
   } catch (error) {
+    notifyOpenClawNonBlocking('app.error', 'MingMe', {
+      route: '/api/ai/registration-trial',
+      code: error?.code || 'REGISTRATION_TRIAL_FAILED',
+      message: error?.message || 'registration trial failed',
+      severity: 'warning',
+    });
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/login-event', async (req, res) => {
+  try {
+    const { userKey, profile, source, method, sessionId } = req.body || {};
+    notifyOpenClawNonBlocking('user.login', 'MingMe', {
+      userKey: `${userKey || ''}`.trim(),
+      nickname: `${profile?.nickname || profile?.name || ''}`.trim(),
+      email: `${profile?.email || ''}`.trim(),
+      phone: `${profile?.phone || ''}`.trim(),
+      city: `${profile?.city || ''}`.trim(),
+      source: `${source || 'client_login_event'}`.trim() || 'client_login_event',
+      method: `${method || 'password'}`.trim() || 'password',
+      sessionId: `${sessionId || ''}`.trim(),
+      status: 'success',
+    });
+
+    res.locals.outputLength = 2;
+    return res.json(ok({ accepted: true }));
+  } catch (error) {
+    notifyOpenClawNonBlocking('app.error', 'MingMe', {
+      route: '/api/ai/login-event',
+      code: error?.code || 'LOGIN_EVENT_FAILED',
+      message: error?.message || 'login event failed',
+      severity: 'warning',
+    });
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
   }
@@ -344,9 +392,28 @@ router.post('/paywall-lead', async (req, res) => {
       source,
     });
 
+    notifyOpenClawNonBlocking('feedback.received', 'MingMe', {
+      eventKind: 'paywall_lead',
+      userKey: `${userKey || lead?.userKey || ''}`.trim(),
+      nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+      city: `${registration?.city || profile?.city || ''}`.trim(),
+      focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+      email: `${registration?.email || profile?.email || ''}`.trim(),
+      phone: `${registration?.phone || profile?.phone || ''}`.trim(),
+      selectedPlan: `${selectedPlan?.productCode || selectedPlan?.key || selectedPlan?.value || ''}`.trim(),
+      source: `${source || 'paywall_lead'}`.trim() || 'paywall_lead',
+      status: 'submitted',
+    });
+
     res.locals.outputLength = JSON.stringify(lead).length;
     return res.json(ok({ lead }));
   } catch (error) {
+    notifyOpenClawNonBlocking('app.error', 'MingMe', {
+      route: '/api/ai/paywall-lead',
+      code: error?.code || 'SAVE_LEAD_FAILED',
+      message: error?.message || 'save lead failed',
+      severity: 'warning',
+    });
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'save lead failed', 'SAVE_LEAD_FAILED'));
   }
@@ -384,9 +451,30 @@ router.post('/manual-payment-review', async (req, res) => {
       source,
     });
 
+    notifyOpenClawNonBlocking('payment.success', 'MingMe', {
+      eventKind: 'manual_payment_review',
+      userKey: `${userKey || review?.userKey || ''}`.trim(),
+      nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+      city: `${registration?.city || profile?.city || ''}`.trim(),
+      email: `${registration?.email || profile?.email || ''}`.trim(),
+      phone: `${registration?.phone || profile?.phone || ''}`.trim(),
+      paymentMethod: `${paymentMethod || ''}`.trim(),
+      amountText: `${amountText || ''}`.trim(),
+      paidAtText: `${paidAtText || ''}`.trim(),
+      screenshotName: `${screenshotName || ''}`.trim(),
+      source: `${source || 'manual_payment_review'}`.trim() || 'manual_payment_review',
+      status: 'submitted',
+    });
+
     res.locals.outputLength = JSON.stringify(review).length;
     return res.json(ok({ review }));
   } catch (error) {
+    notifyOpenClawNonBlocking('payment.failed', 'MingMe', {
+      route: '/api/ai/manual-payment-review',
+      code: error?.code || 'SAVE_MANUAL_PAYMENT_FAILED',
+      message: error?.message || 'save manual payment failed',
+      severity: 'warning',
+    });
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'save manual payment failed', 'SAVE_MANUAL_PAYMENT_FAILED'));
   }
@@ -430,6 +518,12 @@ router.post('/contact-mingji', async (req, res) => {
     res.locals.outputLength = JSON.stringify(contact).length;
     return res.json(ok({ contact }));
   } catch (error) {
+    notifyOpenClawNonBlocking('app.error', 'MingMe', {
+      route: '/api/ai/contact-mingji',
+      code: error?.code || 'SAVE_CONTACT_FAILED',
+      message: error?.message || 'save contact failed',
+      severity: 'warning',
+    });
     res.locals.outputLength = 0;
     return res.status(400).json(fail(error.message || 'save contact failed', 'SAVE_CONTACT_FAILED'));
   }

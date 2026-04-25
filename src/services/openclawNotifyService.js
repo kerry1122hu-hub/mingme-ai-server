@@ -1,19 +1,3 @@
-function isNotifyEnabled() {
-  const raw = `${process.env.OPENCLAW_NOTIFY_ENABLED || ''}`.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-}
-
-function buildHeaders() {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  const token = `${process.env.OPENCLAW_WEBHOOK_TOKEN || ''}`.trim();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
-
 function buildMessageSummary(contact = {}) {
   const lines = [
     'MingMe 收到一条新的用户留言',
@@ -31,43 +15,22 @@ function buildMessageSummary(contact = {}) {
 }
 
 async function notifyOpenClawNewContact(contact = {}) {
-  const webhookUrl = `${process.env.OPENCLAW_WEBHOOK_URL || ''}`.trim();
-  if (!isNotifyEnabled() || !webhookUrl) {
-    return { sent: false, skipped: true };
-  }
-
-  const payload = {
-    event: 'mingme.contact_message.created',
-    source: 'mingme-ai-server',
+  const { notifyOpenClaw } = require('./openclawWebhookService');
+  return notifyOpenClaw('mingme.contact_message.created', 'MingMe', {
+    id: contact.id || null,
+    userKey: contact.userKey || '',
+    nickname: contact.nickname || '',
+    city: contact.city || '',
+    focus: contact.focus || '',
+    email: contact.email || '',
+    phone: contact.phone || '',
+    topic: contact.topic || '',
+    message: contact.message || '',
+    source: contact.source || 'member_contact',
+    status: contact.status || 'pending',
+    summary: buildMessageSummary(contact),
     createdAt: contact.createdAt || new Date().toISOString(),
-    message: buildMessageSummary(contact),
-    contact: {
-      id: contact.id || null,
-      userKey: contact.userKey || '',
-      nickname: contact.nickname || '',
-      city: contact.city || '',
-      focus: contact.focus || '',
-      email: contact.email || '',
-      phone: contact.phone || '',
-      topic: contact.topic || '',
-      message: contact.message || '',
-      source: contact.source || 'member_contact',
-      status: contact.status || 'pending',
-      createdAt: contact.createdAt || null,
-    },
-  };
-
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    throw new Error(`openclaw webhook failed: ${response.status}`);
-  }
-
-  return { sent: true };
 }
 
 module.exports = {
