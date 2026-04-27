@@ -11,6 +11,10 @@ const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
 const { saveManualPaymentReview } = require('../services/manualPaymentService');
 const { saveContactMessage } = require('../services/contactMessageService');
+const {
+  notifyAdminContactMessageNonBlocking,
+  notifyAdminManualPaymentReviewNonBlocking,
+} = require('../services/adminEmailService');
 const { notifyOpenClawNewContact } = require('../services/openclawNotifyService');
 const { notifyOpenClawNonBlocking } = require('../services/openclawWebhookService');
 const { runXiaoLiuRenEngine, consumeXiaoLiuRenQuota } = require('../services/xiaoLiuRenService');
@@ -465,6 +469,24 @@ router.post('/manual-payment-review', async (req, res) => {
       source: `${source || 'manual_payment_review'}`.trim() || 'manual_payment_review',
       status: 'submitted',
     });
+    notifyAdminManualPaymentReviewNonBlocking({
+      id: review?.id || null,
+      userKey: `${userKey || review?.userKey || ''}`.trim(),
+      nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+      city: `${registration?.city || profile?.city || ''}`.trim(),
+      focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+      email: `${registration?.email || profile?.email || ''}`.trim(),
+      phone: `${registration?.phone || profile?.phone || ''}`.trim(),
+      selectedPlan: `${selectedPlan || review?.selectedPlan || ''}`.trim(),
+      paymentMethod: `${paymentMethod || review?.paymentMethod || ''}`.trim(),
+      amountText: `${amountText || ''}`.trim(),
+      paidAtText: `${paidAtText || ''}`.trim(),
+      screenshotName: `${screenshotName || ''}`.trim(),
+      screenshotDataUrl: `${screenshotDataUrl || ''}`.trim(),
+      notes: `${notes || ''}`.trim(),
+      source: `${source || 'manual_payment_review'}`.trim() || 'manual_payment_review',
+      createdAt: new Date().toISOString(),
+    });
 
     res.locals.outputLength = JSON.stringify(review).length;
     return res.json(ok({ review }));
@@ -513,6 +535,19 @@ router.post('/contact-mingji', async (req, res) => {
       source: `${source || 'member_contact'}`.trim() || 'member_contact',
     }).catch((error) => {
       console.error('[openclaw] failed to notify new contact message:', error);
+    });
+    notifyAdminContactMessageNonBlocking({
+      ...contact,
+      userKey: `${userKey || contact?.userKey || ''}`.trim(),
+      nickname: `${registration?.nickname || profile?.nickname || ''}`.trim(),
+      city: `${registration?.city || profile?.city || ''}`.trim(),
+      focus: `${registration?.focus || profile?.focus || ''}`.trim(),
+      email: `${registration?.email || profile?.email || ''}`.trim(),
+      phone: `${registration?.phone || profile?.phone || ''}`.trim(),
+      topic: `${topic || ''}`.trim(),
+      message: `${message || ''}`.trim(),
+      source: `${source || 'member_contact'}`.trim() || 'member_contact',
+      createdAt: new Date().toISOString(),
     });
 
     res.locals.outputLength = JSON.stringify(contact).length;
