@@ -7,6 +7,7 @@ const {
   getMembershipStatus,
   grantRegistrationTrial,
   clearUserAccountData,
+  verifyUserPassword,
 } = require('../services/quotaService');
 const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
@@ -349,7 +350,16 @@ router.post('/login-event', async (req, res) => {
 
 router.post('/delete-account', async (req, res) => {
   try {
-    const { chart, userKey } = req.body || {};
+    const { chart, userKey, password } = req.body || {};
+    if (!`${password || ''}`.trim()) {
+      return res.status(400).json(fail('password is required', 'BAD_REQUEST'));
+    }
+
+    const verified = verifyUserPassword({ chart, userKey, password });
+    if (!verified) {
+      return res.status(403).json(fail('登录密码不正确，请重新输入。', 'PASSWORD_INVALID'));
+    }
+
     const deleted = clearUserAccountData({ chart, userKey });
     res.locals.outputLength = JSON.stringify(deleted).length;
     return res.json(ok({ deleted }));

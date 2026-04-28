@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 
 const DAILY_LIMIT = Math.max(0, Number(process.env.DAILY_LIMIT || 3) || 3);
@@ -86,6 +87,13 @@ function ensureDatabase() {
       notes TEXT NOT NULL DEFAULT '',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(user_key, date_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_auth_credentials (
+      user_key TEXT PRIMARY KEY,
+      password_salt TEXT NOT NULL DEFAULT '',
+      password_hash TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -283,6 +291,59 @@ function buildTrialExpiresAt(days = 30) {
   return expiresAt.toISOString();
 }
 
+function hashPasswordWithSalt(password, salt) {
+  return crypto.scryptSync(`${password || ''}`, salt, 64).toString('base64');
+}
+
+function setUserPassword({ userKey, chart, password }) {
+  const resolvedKey = buildUserKey({ userKey, chart });
+  const normalizedPassword = `${password || ''}`.trim();
+  if (!normalizedPassword) {
+    return null;
+  }
+
+  const salt = crypto.randomBytes(16).toString('base64');
+  const passwordHash = hashPasswordWithSalt(normalizedPassword, salt);
+  db.prepare(`
+    INSERT INTO user_auth_credentials (user_key, password_salt, password_hash, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_key)
+    DO UPDATE SET
+      password_salt = excluded.password_salt,
+      password_hash = excluded.password_hash,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(resolvedKey, salt, passwordHash);
+
+  return { userKey: resolvedKey };
+}
+
+function verifyUserPassword({ userKey, chart, password }) {
+  const resolvedKey = buildUserKey({ userKey, chart });
+  const normalizedPassword = `${password || ''}`.trim();
+  if (!normalizedPassword) {
+    return false;
+  }
+
+  const row = db.prepare(`
+    SELECT password_salt, password_hash
+    FROM user_auth_credentials
+    WHERE user_key = ?
+    LIMIT 1
+  `).get(resolvedKey);
+
+  if (!row?.password_salt || !row?.password_hash) {
+    return false;
+  }
+
+  const candidateHash = hashPasswordWithSalt(normalizedPassword, row.password_salt);
+  const expectedBuffer = Buffer.from(row.password_hash, 'base64');
+  const candidateBuffer = Buffer.from(candidateHash, 'base64');
+  if (expectedBuffer.length !== candidateBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuffer, candidateBuffer);
+}
+
 function getMembershipStatus({ userKey, chart, profile }) {
   const resolvedKey = buildUserKey({ userKey, chart });
   syncUserProfile(resolvedKey, chart, profile);
@@ -393,6 +454,7 @@ function grantRegistrationTrial({
   };
 
   syncUserProfile(resolvedKey, chart, mergedProfile);
+  setUserPassword({ userKey: resolvedKey, password: registration?.password || '' });
 
   const existingRow = getMembershipRow(resolvedKey);
   const existingMembership = normalizeMembership(existingRow);
@@ -594,6 +656,7 @@ function clearUserAccountData({ userKey, chart }) {
       aiUsage: deleteRowsByColumns('ai_usage', ['user_key'], resolvedKey),
       quotaOverrides: deleteRowsByColumns('ai_quota_overrides', ['user_key'], resolvedKey),
       memberships: deleteRowsByColumns('user_memberships', ['user_key'], resolvedKey),
+      authCredentials: deleteRowsByColumns('user_auth_credentials', ['user_key'], resolvedKey),
       profiles: deleteRowsByColumns('user_profiles', ['user_key', 'user_id'], resolvedKey),
       recentSessions: deleteRowsByColumns('memory_recent_sessions', ['user_id'], resolvedKey),
       longTermPatterns: deleteRowsByColumns('memory_long_term_patterns', ['user_id'], resolvedKey),
@@ -650,5 +713,6 @@ module.exports = {
   listUsageOverview,
   listMemberships,
   clearUserAccountData,
+  verifyUserPassword,
   getMigrationMessages,
 };
