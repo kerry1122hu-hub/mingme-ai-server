@@ -1124,12 +1124,24 @@ router.get('/ai-usage', (req, res) => {
             + '<td>' + memberPill + ' ' + passwordPill + '<div class="muted" style="margin-top:4px;">' + (item.expiresAt || '无会员到期时间') + '</div></td>'
             + '<td><div>今日 ' + (item.usedToday || 0) + ' 次 / 近7天 ' + (item.usedLast7Days || 0) + ' 次</div><div class="muted">' + (item.lastUsedAt || '暂无使用记录') + '</div></td>'
             + '<td><div style="display:flex;flex-wrap:wrap;gap:8px;">'
+              + '<button type="button" data-edit-user-expiry="' + item.userKey + '" style="background:rgba(245,248,255,.98);color:#4b5fb8;border:1px solid rgba(117,130,220,0.24);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">改到期时间</button>'
               + '<button type="button" data-reset-user-password="' + item.userKey + '" style="background:rgba(240,252,248,.98);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">重置密码</button>'
               + '<button type="button" data-delete-user="' + item.userKey + '" style="background:rgba(255,244,244,.98);color:#9b4343;border:1px solid rgba(207,120,120,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">删除用户</button>'
             + '</div></td>'
             + '</tr>';
         }).join('')
         : '<tr><td colspan="5" class="muted">当前还没有符合条件的用户记录。</td></tr>';
+    }
+
+    function toDatetimeLocalValue(input) {
+      const date = input ? new Date(input) : null;
+      if (!date || Number.isNaN(date.getTime())) return '';
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = String(date.getMinutes()).padStart(2, '0');
+      return year + '-' + month + '-' + day + 'T' + hour + ':' + minute;
     }
 
     function getMemoryRelatedProfile(item) {
@@ -1738,6 +1750,41 @@ router.get('/ai-usage', (req, res) => {
       }
     }
 
+    async function editUserExpiryByAdmin(userKey) {
+      const normalizedUserKey = String(userKey || '').trim();
+      if (!normalizedUserKey) return;
+      const targetUser = latestUserItems.find((item) => item.userKey === normalizedUserKey) || {};
+      const suggestedExpiry = targetUser.expiresAt
+        ? toDatetimeLocalValue(targetUser.expiresAt)
+        : toDatetimeLocalValue(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      const nextExpiry = window.prompt('请输入新的会员到期时间（格式：YYYY-MM-DDTHH:mm）', suggestedExpiry);
+      if (nextExpiry == null) return;
+      if (!String(nextExpiry || '').trim()) {
+        topStatus.textContent = '已取消：到期时间不能为空。';
+        return;
+      }
+      const nextTier = String(targetUser.memberTier || '').trim() && String(targetUser.memberTier || '').trim() !== 'free'
+        ? String(targetUser.memberTier || '').trim()
+        : 'trial';
+      topStatus.textContent = '正在更新会员到期时间...';
+      try {
+        await requestJson('/admin/api/set-membership', {
+          method: 'POST',
+          body: JSON.stringify({
+            userKey: normalizedUserKey,
+            tier: nextTier,
+            status: 'active',
+            expiresAt: nextExpiry,
+            notes: (targetUser.notes || '管理员手动调整到期时间'),
+          }),
+        });
+        topStatus.textContent = '已更新到期时间：' + normalizedUserKey + ' -> ' + nextExpiry;
+        await loadOverview();
+      } catch (error) {
+        topStatus.textContent = error.message || '更新到期时间失败';
+      }
+    }
+
     async function deleteUserByAdmin(userKey) {
       const normalizedUserKey = String(userKey || '').trim();
       if (!normalizedUserKey) return;
@@ -1894,6 +1941,10 @@ router.get('/ai-usage', (req, res) => {
       const resetUserKey = event.target?.getAttribute?.('data-reset-user-password');
       if (resetUserKey) {
         resetUserPasswordByAdmin(resetUserKey);
+      }
+      const editExpiryUserKey = event.target?.getAttribute?.('data-edit-user-expiry');
+      if (editExpiryUserKey) {
+        editUserExpiryByAdmin(editExpiryUserKey);
       }
       const deleteUserKey = event.target?.getAttribute?.('data-delete-user');
       if (deleteUserKey) {
