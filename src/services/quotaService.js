@@ -344,6 +344,19 @@ function verifyUserPassword({ userKey, chart, password }) {
   return crypto.timingSafeEqual(expectedBuffer, candidateBuffer);
 }
 
+function resetUserPasswordByAdmin({ userKey, password }) {
+  const resolvedKey = buildUserKey({ userKey });
+  const normalizedPassword = `${password || ''}`.trim();
+  if (!resolvedKey) {
+    throw new Error('userKey is required');
+  }
+  if (!normalizedPassword) {
+    throw new Error('password is required');
+  }
+  setUserPassword({ userKey: resolvedKey, password: normalizedPassword });
+  return { userKey: resolvedKey, updated: true };
+}
+
 function getMembershipStatus({ userKey, chart, profile }) {
   const resolvedKey = buildUserKey({ userKey, chart });
   syncUserProfile(resolvedKey, chart, profile);
@@ -607,6 +620,94 @@ function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
   }));
 }
 
+function listUserAccounts({ limit = 300, dateKey = getTodayKey() } = {}) {
+  const normalizedLimit = Math.max(1, Math.min(Number(limit || 300), 1000));
+  const last7From = shiftDateKey(dateKey, -6);
+  return db.prepare(`
+    WITH account_keys AS (
+      SELECT user_key FROM user_profiles
+      UNION
+      SELECT user_key FROM user_memberships
+      UNION
+      SELECT user_key FROM user_auth_credentials
+    )
+    SELECT
+      account_keys.user_key AS user_key,
+      profile.birth_text AS birth_text,
+      profile.nickname AS nickname,
+      profile.gender AS gender,
+      profile.city AS city,
+      profile.role_text AS role_text,
+      profile.focus_text AS focus_text,
+      membership.tier AS tier,
+      membership.status AS status,
+      membership.expires_at AS expires_at,
+      membership.notes AS notes,
+      membership.updated_at AS membership_updated_at,
+      profile.updated_at AS profile_updated_at,
+      auth.updated_at AS password_updated_at,
+      CASE
+        WHEN auth.user_key IS NOT NULL AND auth.password_hash <> '' THEN 1
+        ELSE 0
+      END AS has_password,
+      (
+        SELECT usage_today.count
+        FROM ai_usage AS usage_today
+        WHERE usage_today.user_key = account_keys.user_key
+          AND usage_today.date_key = ?
+        LIMIT 1
+      ) AS used_today,
+      (
+        SELECT COALESCE(SUM(usage_recent.count), 0)
+        FROM ai_usage AS usage_recent
+        WHERE usage_recent.user_key = account_keys.user_key
+          AND usage_recent.date_key BETWEEN ? AND ?
+      ) AS used_last_7_days,
+      (
+        SELECT usage_last.updated_at
+        FROM ai_usage AS usage_last
+        WHERE usage_last.user_key = account_keys.user_key
+        ORDER BY usage_last.updated_at DESC
+        LIMIT 1
+      ) AS last_used_at
+    FROM account_keys
+    LEFT JOIN user_profiles AS profile
+      ON profile.user_key = account_keys.user_key
+    LEFT JOIN user_memberships AS membership
+      ON membership.user_key = account_keys.user_key
+    LEFT JOIN user_auth_credentials AS auth
+      ON auth.user_key = account_keys.user_key
+    ORDER BY
+      COALESCE(membership.updated_at, profile.updated_at, auth.updated_at, '') DESC,
+      account_keys.user_key DESC
+    LIMIT ?
+  `).all(dateKey, last7From, dateKey, normalizedLimit).map((row) => {
+    const membership = normalizeMembership({
+      tier: row.tier,
+      status: row.status,
+      expires_at: row.expires_at,
+      notes: row.notes,
+    });
+    return {
+      userKey: row.user_key,
+      birthText: row.birth_text || '',
+      nickname: row.nickname || '',
+      gender: row.gender || '',
+      city: row.city || '',
+      roleText: row.role_text || '',
+      focusText: row.focus_text || '',
+      hasPassword: Boolean(row.has_password),
+      passwordUpdatedAt: row.password_updated_at || '',
+      usedToday: Number(row.used_today || 0),
+      usedLast7Days: Number(row.used_last_7_days || 0),
+      lastUsedAt: row.last_used_at || '',
+      profileUpdatedAt: row.profile_updated_at || '',
+      membershipUpdatedAt: row.membership_updated_at || '',
+      ...membership,
+    };
+  });
+}
+
 function tableExists(tableName) {
   return Boolean(
     db.prepare(`
@@ -712,7 +813,9 @@ module.exports = {
   setExtraQuota,
   listUsageOverview,
   listMemberships,
+  listUserAccounts,
   clearUserAccountData,
+  resetUserPasswordByAdmin,
   verifyUserPassword,
   getMigrationMessages,
 };

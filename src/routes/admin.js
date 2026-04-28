@@ -5,6 +5,9 @@ const {
   setExtraQuota,
   listUsageOverview,
   listMemberships,
+  listUserAccounts,
+  resetUserPasswordByAdmin,
+  clearUserAccountData,
   DB_FILE,
   DATA_DIR,
 } = require('../services/quotaService');
@@ -122,6 +125,50 @@ router.get('/api/memberships', (req, res) => {
   } catch (error) {
     res.locals.outputLength = 0;
     return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.get('/api/users', (req, res) => {
+  try {
+    const items = listUserAccounts({ limit: req.query?.limit || 300, dateKey: req.query?.dateKey });
+    res.locals.outputLength = JSON.stringify(items).length;
+    return res.json(ok({ items }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'list users failed', 'INTERNAL_ERROR'));
+  }
+});
+
+router.post('/api/user-reset-password', (req, res) => {
+  try {
+    const { userKey, password } = req.body || {};
+    if (!`${userKey || ''}`.trim()) {
+      return res.status(400).json(fail('userKey is required', 'BAD_REQUEST'));
+    }
+    if (!`${password || ''}`.trim()) {
+      return res.status(400).json(fail('password is required', 'BAD_REQUEST'));
+    }
+    const result = resetUserPasswordByAdmin({ userKey, password });
+    res.locals.outputLength = JSON.stringify(result).length;
+    return res.json(ok({ result }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'reset password failed', 'INTERNAL_ERROR'));
+  }
+});
+
+router.post('/api/user-delete', (req, res) => {
+  try {
+    const { userKey } = req.body || {};
+    if (!`${userKey || ''}`.trim()) {
+      return res.status(400).json(fail('userKey is required', 'BAD_REQUEST'));
+    }
+    const deleted = clearUserAccountData({ userKey });
+    res.locals.outputLength = JSON.stringify(deleted).length;
+    return res.json(ok({ deleted }));
+  } catch (error) {
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'delete user failed', 'INTERNAL_ERROR'));
   }
 });
 
@@ -546,6 +593,23 @@ router.get('/ai-usage', (req, res) => {
           <tbody id="membershipBody"></tbody>
         </table>
 
+        <h2 style="margin-top:20px;">用户管理区</h2>
+        <div class="toolbar" style="margin-top:0; margin-bottom:12px;">
+          <input id="userSearch" placeholder="搜索 userKey / 昵称 / 城市 / 角色 / 关注方向" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>用户</th>
+              <th>资料概览</th>
+              <th>账号状态</th>
+              <th>最近使用</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="userBody"></tbody>
+        </table>
+
         <h2 style="margin-top:20px;">会员记忆查看区</h2>
         <div class="form">
           <input id="memoryUserKey" placeholder="输入 userKey，查看这位会员被记住了什么" />
@@ -718,6 +782,8 @@ router.get('/ai-usage', (req, res) => {
     const membershipBody = document.getElementById('membershipBody');
     const membershipSearch = document.getElementById('membershipSearch');
     const membershipGroupFilter = document.getElementById('membershipGroupFilter');
+    const userBody = document.getElementById('userBody');
+    const userSearch = document.getElementById('userSearch');
     const memoryBody = document.getElementById('memoryBody');
     const memorySearch = document.getElementById('memorySearch');
     const mysticToolBody = document.getElementById('mysticToolBody');
@@ -752,6 +818,7 @@ router.get('/ai-usage', (req, res) => {
     const divinationStatus = document.getElementById('divinationStatus');
     const divinationDetail = document.getElementById('divinationDetail');
     let latestMembershipItems = [];
+    let latestUserItems = [];
     let expandedMembershipRows = {};
     let latestMemoryItems = [];
     let latestMysticToolItems = [];
@@ -1021,6 +1088,48 @@ router.get('/ai-usage', (req, res) => {
         .join('');
 
       membershipBody.innerHTML = sectionRows || '<tr><td colspan="5" class="muted">当前筛选下没有会员记录。</td></tr>';
+    }
+
+    function getFilteredUsers(items) {
+      const keyword = String(userSearch?.value || '').trim().toLowerCase();
+      if (!keyword) return items;
+      return items.filter((item) => {
+        const searchBase = [
+          item.userKey,
+          item.nickname,
+          item.city,
+          item.birthText,
+          item.roleText,
+          item.focusText,
+          item.memberTier,
+        ].join(' ').toLowerCase();
+        return searchBase.includes(keyword);
+      });
+    }
+
+    function renderUsers(items) {
+      latestUserItems = Array.isArray(items) ? items : [];
+      const filteredItems = getFilteredUsers(latestUserItems);
+      userBody.innerHTML = filteredItems.length
+        ? filteredItems.map((item) => {
+          const passwordPill = item.hasPassword
+            ? '<span class="pill active">已设密码</span>'
+            : '<span class="pill free">未设密码</span>';
+          const memberPill = item.isPremium
+            ? '<span class="pill premium">会员</span>'
+            : '<span class="pill free">免费</span>';
+          return '<tr>'
+            + '<td><div><strong>' + (item.nickname || '未留昵称') + '</strong></div><div class="mono">' + (item.userKey || '--') + '</div></td>'
+            + '<td><div>' + [item.birthText, item.gender, item.city].filter(Boolean).join(' / ') + '</div><div class="muted">' + [item.roleText, item.focusText].filter(Boolean).join(' / ') + '</div></td>'
+            + '<td>' + memberPill + ' ' + passwordPill + '<div class="muted" style="margin-top:4px;">' + (item.expiresAt || '无会员到期时间') + '</div></td>'
+            + '<td><div>今日 ' + (item.usedToday || 0) + ' 次 / 近7天 ' + (item.usedLast7Days || 0) + ' 次</div><div class="muted">' + (item.lastUsedAt || '暂无使用记录') + '</div></td>'
+            + '<td><div style="display:flex;flex-wrap:wrap;gap:8px;">'
+              + '<button type="button" data-reset-user-password="' + item.userKey + '" style="background:rgba(240,252,248,.98);color:#2c6d66;border:1px solid rgba(117,170,160,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">重置密码</button>'
+              + '<button type="button" data-delete-user="' + item.userKey + '" style="background:rgba(255,244,244,.98);color:#9b4343;border:1px solid rgba(207,120,120,0.26);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">删除用户</button>'
+            + '</div></td>'
+            + '</tr>';
+        }).join('')
+        : '<tr><td colspan="5" class="muted">当前还没有符合条件的用户记录。</td></tr>';
     }
 
     function getMemoryRelatedProfile(item) {
@@ -1510,9 +1619,10 @@ router.get('/ai-usage', (req, res) => {
     async function loadOverview() {
       topStatus.textContent = '正在刷新...';
       try {
-        const [usage, memberships, memories, divinations, analytics, storage, leads, contactMessages, contactMessageStats, manualPayments, approvedManualPayments] = await Promise.all([
+        const [usage, memberships, users, memories, divinations, analytics, storage, leads, contactMessages, contactMessageStats, manualPayments, approvedManualPayments] = await Promise.all([
           requestJson('/admin/api/usage-overview?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/memberships?dateKey=' + encodeURIComponent(dateInput.value)),
+          requestJson('/admin/api/users?dateKey=' + encodeURIComponent(dateInput.value)),
           requestJson('/admin/api/member-memories'),
           requestJson('/admin/api/divination-usage'),
           requestJson('/admin/api/analytics-events?limit=300'),
@@ -1525,6 +1635,7 @@ router.get('/ai-usage', (req, res) => {
         ]);
         renderUsage(usage.items || []);
         renderMemberships(memberships.items || []);
+        renderUsers(users.items || []);
         renderMemoryList(memories.items || []);
         const divinationItems = (divinations.items || []).map((item) => {
           const palaceText = item.secondaryPalaceName
@@ -1602,6 +1713,46 @@ router.get('/ai-usage', (req, res) => {
         await loadOverview();
       } catch (error) {
         saveStatus.textContent = '保存失败：' + error.message;
+      }
+    }
+
+    async function resetUserPasswordByAdmin(userKey) {
+      const normalizedUserKey = String(userKey || '').trim();
+      if (!normalizedUserKey) return;
+      const nextPassword = window.prompt('请输入要为这位用户重置的新密码：');
+      if (nextPassword == null) return;
+      if (!String(nextPassword || '').trim()) {
+        topStatus.textContent = '已取消：新密码不能为空。';
+        return;
+      }
+      topStatus.textContent = '正在重置密码...';
+      try {
+        await requestJson('/admin/api/user-reset-password', {
+          method: 'POST',
+          body: JSON.stringify({ userKey: normalizedUserKey, password: nextPassword }),
+        });
+        topStatus.textContent = '密码已重置：' + normalizedUserKey;
+        await loadOverview();
+      } catch (error) {
+        topStatus.textContent = error.message || '重置密码失败';
+      }
+    }
+
+    async function deleteUserByAdmin(userKey) {
+      const normalizedUserKey = String(userKey || '').trim();
+      if (!normalizedUserKey) return;
+      const confirmed = window.confirm('确认删除这位用户吗？该用户的会员、记忆、留言、付款审核和账号资料都会一并清除，且无法恢复。');
+      if (!confirmed) return;
+      topStatus.textContent = '正在删除用户...';
+      try {
+        const result = await requestJson('/admin/api/user-delete', {
+          method: 'POST',
+          body: JSON.stringify({ userKey: normalizedUserKey }),
+        });
+        topStatus.textContent = '已删除用户：' + normalizedUserKey + '，共清除 ' + Number(result.deleted?.deletedRows || 0) + ' 条关联记录。';
+        await loadOverview();
+      } catch (error) {
+        topStatus.textContent = error.message || '删除用户失败';
       }
     }
 
@@ -1702,6 +1853,7 @@ router.get('/ai-usage', (req, res) => {
     document.getElementById('loadDivinationBtn').addEventListener('click', loadDivinationMemory);
     membershipSearch.addEventListener('input', () => renderMemberships(latestMembershipItems));
     membershipGroupFilter.addEventListener('change', () => renderMemberships(latestMembershipItems));
+    userSearch.addEventListener('input', () => renderUsers(latestUserItems));
     leadPlanFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     leadContactFilter.addEventListener('change', () => renderPaywallLeads(latestLeadItems));
     contactMessageSearch.addEventListener('input', () => renderContactMessages(latestContactMessageItems));
@@ -1738,6 +1890,14 @@ router.get('/ai-usage', (req, res) => {
           [membershipKey]: !expandedMembershipRows[membershipKey],
         };
         renderMemberships(latestMembershipItems);
+      }
+      const resetUserKey = event.target?.getAttribute?.('data-reset-user-password');
+      if (resetUserKey) {
+        resetUserPasswordByAdmin(resetUserKey);
+      }
+      const deleteUserKey = event.target?.getAttribute?.('data-delete-user');
+      if (deleteUserKey) {
+        deleteUserByAdmin(deleteUserKey);
       }
     });
     loadOverview();
