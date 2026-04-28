@@ -545,6 +545,93 @@ function listMemberships({ limit = 200, dateKey = getTodayKey() } = {}) {
   }));
 }
 
+function tableExists(tableName) {
+  return Boolean(
+    db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+      LIMIT 1
+    `).get(tableName)
+  );
+}
+
+function getTableColumns(tableName) {
+  if (!tableExists(tableName)) {
+    return new Set();
+  }
+
+  return new Set(
+    db.prepare(`PRAGMA table_info(${tableName})`).all().map((column) => column.name)
+  );
+}
+
+function deleteRowsByColumns(tableName, candidateColumns, value) {
+  const columns = getTableColumns(tableName);
+  const matchedColumns = candidateColumns.filter((columnName) => columns.has(columnName));
+  if (!matchedColumns.length) {
+    return 0;
+  }
+
+  const whereClause = matchedColumns.map((columnName) => `${columnName} = ?`).join(' OR ');
+  const statement = db.prepare(`DELETE FROM ${tableName} WHERE ${whereClause}`);
+  const result = statement.run(...matchedColumns.map(() => value));
+  return Number(result?.changes || 0);
+}
+
+function clearUserAccountData({ userKey, chart }) {
+  const resolvedKey = buildUserKey({ userKey, chart });
+  const paymentOrderIds = tableExists('payment_orders')
+    ? db.prepare(`
+        SELECT order_id
+        FROM payment_orders
+        WHERE user_key = ?
+      `).all(resolvedKey).map((row) => `${row.order_id || ''}`.trim()).filter(Boolean)
+    : [];
+
+  const counts = db.transaction(() => {
+    const deleted = {
+      aiUsage: deleteRowsByColumns('ai_usage', ['user_key'], resolvedKey),
+      quotaOverrides: deleteRowsByColumns('ai_quota_overrides', ['user_key'], resolvedKey),
+      memberships: deleteRowsByColumns('user_memberships', ['user_key'], resolvedKey),
+      profiles: deleteRowsByColumns('user_profiles', ['user_key', 'user_id'], resolvedKey),
+      recentSessions: deleteRowsByColumns('memory_recent_sessions', ['user_id'], resolvedKey),
+      longTermPatterns: deleteRowsByColumns('memory_long_term_patterns', ['user_id'], resolvedKey),
+      actionTracker: deleteRowsByColumns('memory_action_tracker', ['user_id'], resolvedKey),
+      memberProfileMemory: deleteRowsByColumns('member_profile_memory', ['user_key'], resolvedKey),
+      memberSessionMemory: deleteRowsByColumns('member_session_memory', ['user_key'], resolvedKey),
+      memberResponsePreference: deleteRowsByColumns('member_response_preference', ['user_key'], resolvedKey),
+      memberQuestionMemory: deleteRowsByColumns('member_question_memory', ['user_key'], resolvedKey),
+      contactMessages: deleteRowsByColumns('contact_messages', ['user_key'], resolvedKey),
+      manualPaymentReviews: deleteRowsByColumns('manual_payment_reviews', ['user_key'], resolvedKey),
+      paywallLeads: deleteRowsByColumns('paywall_leads', ['user_key'], resolvedKey),
+      xiaoLiuRenUsage: deleteRowsByColumns('xiao_liu_ren_usage', ['user_key', 'identity_key'], resolvedKey),
+      analyticsEvents: deleteRowsByColumns('pwa_events', ['user_key'], resolvedKey),
+      userEntitlements: deleteRowsByColumns('user_entitlements', ['user_key'], resolvedKey),
+      paymentOrders: deleteRowsByColumns('payment_orders', ['user_key'], resolvedKey),
+    };
+
+    if (paymentOrderIds.length && tableExists('payment_transactions')) {
+      const placeholders = paymentOrderIds.map(() => '?').join(', ');
+      deleted.paymentTransactions = Number(
+        db.prepare(`DELETE FROM payment_transactions WHERE order_id IN (${placeholders})`)
+          .run(...paymentOrderIds)
+          ?.changes || 0
+      );
+    } else {
+      deleted.paymentTransactions = 0;
+    }
+
+    return deleted;
+  })();
+
+  return {
+    userKey: resolvedKey,
+    deletedRows: Object.values(counts).reduce((sum, count) => sum + Number(count || 0), 0),
+    counts,
+  };
+}
+
 function getMigrationMessages() {
   return migrationMessages.slice();
 }
@@ -562,5 +649,6 @@ module.exports = {
   setExtraQuota,
   listUsageOverview,
   listMemberships,
+  clearUserAccountData,
   getMigrationMessages,
 };

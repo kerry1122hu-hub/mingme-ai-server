@@ -6,6 +6,7 @@ const {
   consumeQuota,
   getMembershipStatus,
   grantRegistrationTrial,
+  clearUserAccountData,
 } = require('../services/quotaService');
 const { trackAnalyticsEvent } = require('../services/analyticsService');
 const { savePaywallLead } = require('../services/paywallLeadService');
@@ -339,6 +340,24 @@ router.post('/login-event', async (req, res) => {
       route: '/api/ai/login-event',
       code: error?.code || 'LOGIN_EVENT_FAILED',
       message: error?.message || 'login event failed',
+      severity: 'warning',
+    });
+    res.locals.outputLength = 0;
+    return res.status(500).json(fail(error.message || 'server error', 'SERVER_ERROR'));
+  }
+});
+
+router.post('/delete-account', async (req, res) => {
+  try {
+    const { chart, userKey } = req.body || {};
+    const deleted = clearUserAccountData({ chart, userKey });
+    res.locals.outputLength = JSON.stringify(deleted).length;
+    return res.json(ok({ deleted }));
+  } catch (error) {
+    notifyOpenClawNonBlocking('app.error', 'MingMe', {
+      route: '/api/ai/delete-account',
+      code: error?.code || 'DELETE_ACCOUNT_FAILED',
+      message: error?.message || 'delete account failed',
       severity: 'warning',
     });
     res.locals.outputLength = 0;
