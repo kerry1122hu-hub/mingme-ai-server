@@ -1930,6 +1930,13 @@ async function runXiaoLiuRenReading({
   const payloadText = [
     `【问事场景】${textOf(engineResult?.sceneName, '未明确')}`,
     `【用户原问】${textOf(question, '此刻尚未说得很直，但系统会先按当前局面替他点题。')}`,
+    `【这次具体在问】${textOf(engineResult?.questionFocus?.summary || engineResult?.questionFocus?.focus_object, textOf(question, '未明确'))}`,
+    engineResult?.questionFocus?.action_hint
+      ? `【眼前卡住的动作】${textOf(engineResult.questionFocus.action_hint)}`
+      : '',
+    engineResult?.questionFocus?.real_need
+      ? `【用户真正想确认】${textOf(engineResult.questionFocus.real_need)}`
+      : '',
     `【更可能真正想问的那层】${textOf(engineResult?.likelyConcern, '未明确')}`,
     engineResult?.chartClues ? `【命盘与近期状态线索】${engineResult.chartClues}` : '',
     '【小六壬主断结果】',
@@ -1991,6 +1998,7 @@ async function runXiaoLiuRenReading({
 【输出任务】
 - 先正面回应用户这句具体在问什么，不能只复述卦名或套模板。
 - 第一段里就要把用户问的对象说出来，例如“这笔交易”“这段关系”“这次寻人”“这趟出行”“这一步职业选择”。
+- 如果系统已经给出“这次具体在问 / 眼前卡住的动作 / 用户真正想确认”，就必须直接拿这些内容落笔，不能退回到泛泛的场景模板。
 - 先点明这卦落在什么势上。
 - 再把主宫、场景断、双宫组合串成一条判断链。
 - 若用户问题还泛，就先替他点破“他真正卡的是哪一层”。
@@ -2006,6 +2014,7 @@ async function runXiaoLiuRenReading({
 - 允许有一点“老师傅当面点题”的味道，但不要只写意象。
 - 不要写成列表或汇报稿。
 - 不要出现“根据以上分析”“总结来说”。
+- 不要把回答写成任何场景都能套用的通用稿，必须至少点出用户这次问的具体对象、动作或卡点。
 - 字数比普通回答略展开，但以断事清楚为先。`,
       },
       {

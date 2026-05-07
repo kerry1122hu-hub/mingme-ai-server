@@ -603,6 +603,105 @@ function pickLikelyConcern(sceneType) {
   return mapping[sceneType] || mapping.decision;
 }
 
+function normalizeQuestionText(question = '') {
+  return `${question || ''}`
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function detectQuestionAction(sceneType, text) {
+  const actionRules = {
+    career: [
+      [/推进|推动|提交|汇报|谈项目|合作|签约|入职|跳槽|转岗/, '推进这一步'],
+      [/该不该做|要不要做|要不要继续|继续/, '继续推进'],
+    ],
+    wealth: [
+      [/付款|打款|转账|下单|签合同|签约|回款|收款|成交/, '处理这笔财务动作'],
+      [/能不能回|能否回|收不收得到|拿不拿得到/, '等这笔钱落下来'],
+    ],
+    relationship: [
+      [/表白|复合|联系|见面|和好|推进关系/, '推进这段关系'],
+      [/要不要放下|值不值得等|该不该主动/, '决定自己还要不要继续投心力'],
+    ],
+    communication: [
+      [/找人|寻人|找回|寻物|联系|发消息|打电话/, '追这条线索'],
+      [/能不能找到|找不找得到|回不回|有没有消息/, '等一个明确回音'],
+    ],
+    travel: [
+      [/出门|出行|去不去|见面|拜访|动身|启程/, '动身去做这件事'],
+      [/身体|恢复|检查|治疗|休息/, '先顾住身体状态'],
+    ],
+    decision: [
+      [/要不要|该不该|能不能|值不值得|现在做不做|现在定不定/, '现在拍板'],
+      [/等一等|缓一缓|观望/, '先缓一步再定'],
+    ],
+  };
+  const rules = actionRules[sceneType] || actionRules.decision;
+  const matched = rules.find(([pattern]) => pattern.test(text));
+  return matched ? matched[1] : '';
+}
+
+function detectQuestionObject(sceneType, text) {
+  if (!text) return '';
+  const objectRules = {
+    career: [[/项目|合作|方案|汇报|offer|工作|职业|岗位|入职|跳槽/, '这一步事业或项目安排']],
+    wealth: [[/合同|签约|订单|回款|收款|付款|钱|投资|成交/, '这笔钱或这份合作']],
+    relationship: [[/关系|感情|复合|前任|喜欢的人|对方|婚姻|相处/, '这段关系']],
+    communication: [[/人|对方|消息|回复|线索|东西|物件|下落/, '这条联系或线索']],
+    travel: [[/出行|行程|见面|拜访|身体|健康|恢复|检查/, '这次出行或身体状态']],
+    decision: [[/决定|选择|方向|计划|安排|机会/, '这一步选择']],
+  };
+  const rules = objectRules[sceneType] || objectRules.decision;
+  const matched = rules.find(([pattern]) => pattern.test(text));
+  return matched ? matched[1] : '';
+}
+
+function detectQuestionNeed(text) {
+  const rules = [
+    [/能不能|会不会|有没有/, '它到底能不能成'],
+    [/要不要|该不该|值不值得/, '自己现在到底该不该动'],
+    [/什么时候|多久/, '结果多久会明朗'],
+    [/找不找得到|能不能找到|回不回来/, '这条线最后有没有结果'],
+    [/稳不稳|靠不靠谱|真不真/, '眼前这一步到底稳不稳'],
+  ];
+  const matched = rules.find(([pattern]) => pattern.test(text));
+  return matched ? matched[1] : '';
+}
+
+function buildQuestionFocus(question = '', sceneType = 'decision') {
+  const text = normalizeQuestionText(question);
+  if (!text) {
+    return {
+      original: '',
+      summary: '',
+      focus_object: '',
+      action_hint: '',
+      real_need: '',
+      concern_text: pickLikelyConcern(sceneType),
+    };
+  }
+
+  const focusObject = detectQuestionObject(sceneType, text);
+  const actionHint = detectQuestionAction(sceneType, text);
+  const realNeed = detectQuestionNeed(text);
+  const summary = text.length > 36 ? `${text.slice(0, 36)}…` : text;
+  const concernText = [
+    focusObject ? `你这次不是泛泛在问运势，更像是在问${focusObject}` : '你这次不是泛泛在问运势',
+    actionHint ? `眼前到底该不该${actionHint}` : '',
+    realNeed ? `以及${realNeed}` : '',
+  ].filter(Boolean).join('，');
+
+  return {
+    original: text,
+    summary,
+    focus_object: focusObject,
+    action_hint: actionHint,
+    real_need: realNeed,
+    concern_text: concernText || pickLikelyConcern(sceneType),
+  };
+}
+
 function getEngineConfig(engineVersion = 'v1.1') {
   const row = db.prepare(`
     SELECT *
@@ -1346,6 +1445,7 @@ function runXiaoLiuRenEngine({
   module = 'mingji_one_gua',
 }) {
   const resolvedSceneType = detectSceneType(question, sceneType);
+  const questionFocus = buildQuestionFocus(question, resolvedSceneType);
   const chinaParts = buildChinaDateParts(eventDateTime);
   const chinaDateTime = buildChinaIsoString(chinaParts);
   const lunarContext = buildLunarContext(chinaParts);
@@ -1458,7 +1558,8 @@ function runXiaoLiuRenEngine({
     sceneType: resolvedSceneType,
     sceneName: SCENE_FALLBACKS[resolvedSceneType] || resolvedSceneType,
     question: `${question || ''}`.trim(),
-    likelyConcern: pickLikelyConcern(resolvedSceneType),
+    questionFocus,
+    likelyConcern: questionFocus.concern_text || pickLikelyConcern(resolvedSceneType),
     chartClues: normalizeChartCluesSafe(chart),
     eventContext: {
       localMonth,
